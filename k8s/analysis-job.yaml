@@ -1,0 +1,102 @@
+# Analysis Job
+#
+# Post-sweep analysis and Chart 1 generation. Aggregates results from all estimators,
+# computes metrics, and generates visualizations.
+#
+# Purpose:
+#   - Install dependencies (matplotlib, pandas, numpy, pydantic)
+#   - Run analysis module: aggregates results from /data/config-exploration/results/raw/
+#   - Generate Chart 1 (sim2real drift and SLO compliance across estimators)
+#   - Write analysis output to /data/config-exploration/results/analysis/
+#
+# Prerequisites:
+#   - All sweep jobs have completed successfully:
+#     - blis-sweep.yaml
+#     - llmservingsim-sweep.yaml
+#     - aiconfigurator-sweep.yaml
+#     - vidur-sweep.yaml
+#     - llm-optimizer-sweep.yaml
+#   - PVC "data-pvc" exists with results at /data/config-exploration/results/raw/
+#
+# Usage:
+#   kubectl apply -f analysis-job.yaml -n jchen
+#
+# To delete and retry:
+#   kubectl delete -f analysis-job.yaml -n jchen
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: config-exploration-analysis
+  namespace: jchen
+  labels:
+    app: config-exploration-analysis
+    experiment: config-exploration
+    tool: analysis
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 1800  # 30min hard cap
+  template:
+    metadata:
+      labels:
+        app: config-exploration-analysis
+        experiment: config-exploration
+        tool: analysis
+    spec:
+      restartPolicy: Never
+
+      containers:
+        - name: analysis
+          image: python:3.11-slim
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -euo pipefail
+
+              echo "=== Installing dependencies ==="
+              apt-get update -qq && apt-get install -y -qq git >/dev/null 2>&1
+              pip install --no-cache-dir matplotlib pandas numpy pydantic pyyaml >/dev/null 2>&1
+
+              echo "=== Cloning experiment repo ==="
+              cd /workspace
+              git clone https://github.com/inference-sim/sim2real-config-exploration-validation.git
+              cd sim2real-config-exploration-validation
+              git submodule update --init --recursive
+
+              echo "=== Verifying sweep results exist ==="
+              for tool in blis llmservingsim aiconfigurator vidur llm-optimizer; do
+                result_file="/data/config-exploration/results/raw/${tool}.json"
+                if [ ! -f "$result_file" ]; then
+                  echo "WARNING: ${tool}.json not found (sweep may not have completed)"
+                else
+                  echo "Found ${tool}.json ($(stat -f%z "$result_file" 2>/dev/null || stat -c%s "$result_file") bytes)"
+                fi
+              done
+
+              echo "=== Running analysis and Chart 1 generation ==="
+              python3 -m experiments.run_all analyze --results-dir /data/config-exploration/results
+
+              echo "=== Analysis complete ==="
+              ls -lh /data/config-exploration/results/analysis/ || true
+
+          resources:
+            limits:
+              cpu: "2"
+              memory: "4Gi"
+            requests:
+              cpu: "2"
+              memory: "4Gi"
+
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+            - name: data
+              mountPath: /data
+
+      volumes:
+        - name: workspace
+          emptyDir: {}
+        - name: data
+          persistentVolumeClaim:
+            claimName: data-pvc

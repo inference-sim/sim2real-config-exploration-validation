@@ -1,0 +1,19 @@
+You are investigating the inference-sim (BLIS) Go codebase to answer specific questions about default parameter values and implicit assumptions.
+
+Your working directory is /Users/jchen/go/src/inference-sim/sim2real-config-exploration-validation
+
+Research questions:
+1. Pipeline parallelism (PP): Is there any support for PP? What's the default? Search for pipeline_parallel, pp_size, or related parallelism concepts in estimators/inference-sim/
+2. max_num_running_reqs: Confirm this is the equivalent of vLLM's max_num_seqs. Find where it's used in the scheduler/batching logic.
+3. max_num_scheduled_tokens: Confirm this is the equivalent of vLLM's max_num_batched_tokens. Find where it's used.
+4. Prefix caching: Does the simulator model prefix caching at all? Search for prefix_cache, shared_prefix, kv_cache_sharing, or similar concepts.
+5. Block size: Verify the default is 16 tokens. Find where block_size_in_tokens is defined and used.
+
+Search the Go source code under estimators/inference-sim/ and provide:
+- File paths and line numbers
+- Relevant code snippets
+- Clear answers to each question
+
+Start by finding the main flag definitions (likely in main.go or cmd/ directory), then trace through the code to understand how each parameter is used. Use grep and find commands to search, then Read tool to examine relevant files.
+
+Provide a concise summary with evidence (file paths, line numbers, code snippets) for each of the 5 questions.

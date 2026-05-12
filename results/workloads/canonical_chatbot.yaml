@@ -1,0 +1,27 @@
+version: "2"
+seed: 0
+category: language
+clients:
+    - id: preset-chatbot
+      tenant_id: ""
+      slo_class: ""
+      rate_fraction: 1
+      arrival:
+        process: constant
+      input_distribution:
+        type: gaussian
+        params:
+            max: 800
+            mean: 256
+            min: 2
+            std_dev: 100
+      output_distribution:
+        type: gaussian
+        params:
+            max: 1024
+            mean: 256
+            min: 1
+            std_dev: 100
+      streaming: false
+aggregate_rate: 10
+num_requests: 100

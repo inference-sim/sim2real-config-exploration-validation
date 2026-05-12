@@ -1,0 +1,15 @@
+[submodule "estimators/LLMServingSim"]
+	path = estimators/LLMServingSim
+	url = https://github.com/casys-kaist/LLMServingSim.git
+[submodule "estimators/aiconfigurator"]
+	path = estimators/aiconfigurator
+	url = https://github.com/ai-dynamo/aiconfigurator.git
+[submodule "estimators/vidur"]
+	path = estimators/vidur
+	url = https://github.com/microsoft/vidur.git
+[submodule "estimators/llm-optimizer"]
+	path = estimators/llm-optimizer
+	url = https://github.com/bentoml/llm-optimizer.git
+[submodule "estimators/inference-sim"]
+	path = estimators/inference-sim
+	url = https://github.com/inference-sim/inference-sim.git

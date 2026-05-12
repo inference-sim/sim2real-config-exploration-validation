@@ -1,0 +1,98 @@
+# AIConfigurator Config Sweep Job
+#
+# Runs AIConfigurator config sweep (CPU-only, very fast at ~2min). AIConfigurator
+# has native config search via "cli default" sweeps, but we only expect ~25 configs.
+#
+# Purpose:
+#   - Install aiconfigurator==0.8.0
+#   - Run sweep (no prune needed, small config space)
+#   - Results written to /data/config-exploration/results/raw/aiconfigurator.json
+#
+# Prerequisites:
+#   - setup-job has completed successfully (workloads generated)
+#   - PVC "data-pvc" exists in namespace jchen
+#   - Secret "hf-secret" with key "HF_TOKEN" exists in namespace jchen
+#
+# Usage:
+#   kubectl apply -f aiconfigurator-sweep.yaml -n jchen
+#
+# To delete and retry:
+#   kubectl delete -f aiconfigurator-sweep.yaml -n jchen
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: aiconfigurator-sweep
+  namespace: jchen
+  labels:
+    app: aiconfigurator-sweep
+    experiment: config-exploration
+    tool: aiconfigurator
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 1800  # 30min hard cap
+  template:
+    metadata:
+      labels:
+        app: aiconfigurator-sweep
+        experiment: config-exploration
+        tool: aiconfigurator
+    spec:
+      restartPolicy: Never
+
+      containers:
+        - name: sweep
+          image: python:3.11-slim
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -euo pipefail
+
+              echo "=== Installing dependencies ==="
+              apt-get update -qq && apt-get install -y -qq git >/dev/null 2>&1
+              pip install --no-cache-dir aiconfigurator==0.8.0 pydantic pyyaml >/dev/null 2>&1
+
+              echo "=== Cloning experiment repo ==="
+              cd /workspace
+              git clone https://github.com/inference-sim/sim2real-config-exploration-validation.git
+              cd sim2real-config-exploration-validation
+              git submodule update --init --recursive
+
+              echo "=== Running AIConfigurator sweep (no prune, small config space) ==="
+              python3 -m experiments.run_all sweep --tool aiconfigurator --results-dir /data/config-exploration/results
+
+              echo "=== Sweep complete ==="
+              ls -lh /data/config-exploration/results/raw/aiconfigurator.json || true
+
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hf-secret
+                  key: HF_TOKEN
+            - name: HF_HOME
+              value: /workspace/.cache/huggingface
+            - name: HOME
+              value: /workspace
+
+          resources:
+            limits:
+              cpu: "2"
+              memory: "4Gi"
+            requests:
+              cpu: "2"
+              memory: "4Gi"
+
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+            - name: data
+              mountPath: /data
+
+      volumes:
+        - name: workspace
+          emptyDir: {}
+        - name: data
+          persistentVolumeClaim:
+            claimName: data-pvc

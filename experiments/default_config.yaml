@@ -1,0 +1,42 @@
+# Experiment definition for config exploration.
+#
+# Copy this file, edit it, and pass with:
+#   python -m experiments.run_all --config my_config.yaml <command>
+#
+# Every field has a default; you only need to specify what you want to change.
+
+experiment:
+  name: config-exploration-llama3-8b
+  description: Llama 3.1 8B on H100, SLO 300ms TTFT
+
+model:
+  name: meta-llama/Llama-3.1-8B
+  hardware: H100_SXM_80GB
+  max_gpus: 8
+  gpu_cost_per_hour: 3.20
+
+workload:
+  # Available presets: chatbot, contentgen, summarization, multidoc
+  preset: chatbot
+  num_requests: 10000
+  rate: 10.0
+  isl_mean: 512
+  isl_max: 2048
+  osl_mean: 256
+  osl_max: 1024
+  arrival_pattern: poisson
+  seed: 42
+
+slo:
+  ttft_mean_ms: 300
+
+analysis:
+  top_k: 3
+  min_throughput_tok_s: 200
+
+tools:
+  - blis
+  - llmservingsim
+  - aiconfigurator
+  - vidur
+  - llm-optimizer

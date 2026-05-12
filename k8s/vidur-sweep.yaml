@@ -1,0 +1,97 @@
+# Vidur Config Sweep Job
+#
+# Runs Vidur config sweep across 1,408 configs (CPU-only, uses Ray for distributed
+# simulation). Vidur has native config search via "config_optimizer" with binary
+# search under SLO constraints.
+#
+# Purpose:
+#   - Clone Vidur and install dependencies
+#   - Prune config space if needed
+#   - Sweep all valid configs with Vidur
+#   - Results written to /data/config-exploration/results/raw/vidur.json
+#
+# Prerequisites:
+#   - setup-job has completed successfully (workloads generated)
+#   - PVC "data-pvc" exists in namespace jchen
+#
+# Usage:
+#   kubectl apply -f vidur-sweep.yaml -n jchen
+#
+# To delete and retry:
+#   kubectl delete -f vidur-sweep.yaml -n jchen
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: vidur-sweep
+  namespace: jchen
+  labels:
+    app: vidur-sweep
+    experiment: config-exploration
+    tool: vidur
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 21600  # 6h hard cap
+  template:
+    metadata:
+      labels:
+        app: vidur-sweep
+        experiment: config-exploration
+        tool: vidur
+    spec:
+      restartPolicy: Never
+
+      containers:
+        - name: sweep
+          image: python:3.11-slim
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -euo pipefail
+
+              echo "=== Installing dependencies ==="
+              apt-get update -qq && apt-get install -y -qq git >/dev/null 2>&1
+              pip install --no-cache-dir pydantic pyyaml >/dev/null 2>&1
+
+              echo "=== Cloning Vidur ==="
+              cd /workspace
+              git clone https://github.com/vidur-team/vidur.git
+              cd vidur
+              pip install --no-cache-dir -e . >/dev/null 2>&1
+
+              echo "=== Cloning experiment repo ==="
+              cd /workspace
+              git clone https://github.com/inference-sim/sim2real-config-exploration-validation.git
+              cd sim2real-config-exploration-validation
+              git submodule update --init --recursive
+
+              echo "=== Running prune (if needed) ==="
+              python3 -m experiments.run_all prune --tool vidur --results-dir /data/config-exploration/results
+
+              echo "=== Running Vidur sweep ==="
+              python3 -m experiments.run_all sweep --tool vidur --results-dir /data/config-exploration/results
+
+              echo "=== Sweep complete ==="
+              ls -lh /data/config-exploration/results/raw/vidur.json || true
+
+          resources:
+            limits:
+              cpu: "8"
+              memory: "32Gi"
+            requests:
+              cpu: "8"
+              memory: "32Gi"
+
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+            - name: data
+              mountPath: /data
+
+      volumes:
+        - name: workspace
+          emptyDir: {}
+        - name: data
+          persistentVolumeClaim:
+            claimName: data-pvc

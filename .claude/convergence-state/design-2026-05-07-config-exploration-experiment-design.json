@@ -1,0 +1,12 @@
+{
+  "gate": "design",
+  "artifact_id": "design-2026-05-07-config-exploration-experiment-design",
+  "commit": "6bda17bbd2206bbcfb1c628148d729db7bd25225",
+  "schema_version": 1,
+  "round": 1,
+  "max_rounds": 10,
+  "model": "haiku",
+  "history": [],
+  "status": "reviewing",
+  "updated_at": "2026-05-11T20:00:00Z"
+}

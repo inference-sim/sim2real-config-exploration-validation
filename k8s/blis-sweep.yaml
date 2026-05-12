@@ -1,0 +1,109 @@
+# BLIS (inference-sim) Config Sweep Job
+#
+# Runs inference-sim config sweep across 1,408 configs (CPU-only, no GPU required).
+# Uses the blis binary built by setup-job or rebuilds if needed.
+#
+# Purpose:
+#   - Prune config space if needed (removes invalid or OOM configs)
+#   - Sweep all valid configs with blis (single-point evaluator, external sweep loop)
+#   - Results written to /data/config-exploration/results/raw/blis.json
+#
+# Prerequisites:
+#   - setup-job has completed successfully
+#   - PVC "data-pvc" exists in namespace jchen with workloads at /data/config-exploration/results/workloads/
+#
+# Usage:
+#   kubectl apply -f blis-sweep.yaml -n jchen
+#
+# To delete and retry:
+#   kubectl delete -f blis-sweep.yaml -n jchen
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: blis-sweep
+  namespace: jchen
+  labels:
+    app: blis-sweep
+    experiment: config-exploration
+    tool: blis
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 43200  # 12h hard cap
+  template:
+    metadata:
+      labels:
+        app: blis-sweep
+        experiment: config-exploration
+        tool: blis
+    spec:
+      restartPolicy: Never
+
+      containers:
+        - name: sweep
+          image: python:3.11-slim
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -euo pipefail
+
+              echo "=== Installing dependencies ==="
+              apt-get update -qq && apt-get install -y -qq git wget >/dev/null 2>&1
+              pip install --no-cache-dir pydantic pyyaml >/dev/null 2>&1
+
+              echo "=== Installing Go 1.21 ==="
+              wget -q https://go.dev/dl/go1.21.0.linux-amd64.tar.gz
+              tar -C /usr/local -xzf go1.21.0.linux-amd64.tar.gz
+              export PATH=$PATH:/usr/local/go/bin
+              go version
+
+              echo "=== Checking for pre-built blis binary ==="
+              if [ -f /data/config-exploration/bin/blis ]; then
+                echo "Using pre-built blis binary from setup-job"
+                export PATH=/data/config-exploration/bin:$PATH
+              else
+                echo "Building blis binary (setup-job may not have run)"
+                cd /workspace
+                git clone https://github.com/inference-sim/inference-sim.git
+                cd inference-sim
+                go build -o blis ./cmd/blis
+                export PATH=/workspace/inference-sim:$PATH
+              fi
+              blis --version || echo "(version command not available)"
+
+              echo "=== Cloning experiment repo ==="
+              cd /workspace
+              git clone https://github.com/inference-sim/sim2real-config-exploration-validation.git
+              cd sim2real-config-exploration-validation
+              git submodule update --init --recursive
+
+              echo "=== Running prune (if needed) ==="
+              python3 -m experiments.run_all prune --tool blis --results-dir /data/config-exploration/results
+
+              echo "=== Running BLIS sweep ==="
+              python3 -m experiments.run_all sweep --tool blis --results-dir /data/config-exploration/results
+
+              echo "=== Sweep complete ==="
+              ls -lh /data/config-exploration/results/raw/blis.json || true
+
+          resources:
+            limits:
+              cpu: "8"
+              memory: "16Gi"
+            requests:
+              cpu: "8"
+              memory: "16Gi"
+
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+            - name: data
+              mountPath: /data
+
+      volumes:
+        - name: workspace
+          emptyDir: {}
+        - name: data
+          persistentVolumeClaim:
+            claimName: data-pvc

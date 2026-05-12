@@ -1,0 +1,133 @@
+# llm-optimizer Config Sweep Job (REQUIRES GPU)
+#
+# Runs llm-optimizer config sweep across 1,408 configs using 8x H100 GPUs.
+# llm-optimizer has native grid search with --constraints for SLO filtering.
+# This is the longest-running job (~375 GPU hours over 15 days wall time).
+#
+# Purpose:
+#   - Install llm-optimizer
+#   - Run native grid search with --continue for checkpointing (automatically resumes
+#     if interrupted, writes progress to /data/config-exploration/results/checkpoints/)
+#   - Results written to /data/config-exploration/results/raw/llm-optimizer.json
+#
+# Prerequisites:
+#   - setup-job has completed successfully (workloads generated)
+#   - PVC "data-pvc" exists in namespace jchen
+#   - Secret "hf-secret" with key "HF_TOKEN" exists in namespace jchen
+#   - Cluster has H100 nodes available
+#
+# Usage:
+#   kubectl apply -f llm-optimizer-sweep.yaml -n jchen
+#
+# To delete and retry:
+#   kubectl delete -f llm-optimizer-sweep.yaml -n jchen
+#
+# Note: This job uses --continue for automatic resume on restarts (checkpoints written
+# to /data/config-exploration/results/checkpoints/llm-optimizer/). If the job is
+# deleted and restarted, it will resume from the last checkpoint.
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: llm-optimizer-sweep
+  namespace: jchen
+  labels:
+    app: llm-optimizer-sweep
+    experiment: config-exploration
+    tool: llm-optimizer
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 1296000  # 15 days hard cap (~375 GPU hours)
+  template:
+    metadata:
+      labels:
+        app: llm-optimizer-sweep
+        experiment: config-exploration
+        tool: llm-optimizer
+    spec:
+      restartPolicy: Never
+
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: nvidia.com/gpu.product
+                    operator: In
+                    values:
+                      - NVIDIA-H100-80GB-HBM3
+
+      containers:
+        - name: sweep
+          image: vllm/vllm-openai:v0.19.0
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -euo pipefail
+
+              echo "=== Installing dependencies ==="
+              apt-get update -qq && apt-get install -y -qq git >/dev/null 2>&1
+              pip install --no-cache-dir pydantic pyyaml >/dev/null 2>&1
+
+              echo "=== Installing llm-optimizer ==="
+              cd /workspace
+              git clone https://github.com/awslabs/llm-optimizer.git
+              cd llm-optimizer
+              pip install --no-cache-dir -e . >/dev/null 2>&1
+
+              echo "=== Cloning experiment repo ==="
+              cd /workspace
+              git clone https://github.com/inference-sim/sim2real-config-exploration-validation.git
+              cd sim2real-config-exploration-validation
+              git submodule update --init --recursive
+
+              echo "=== Running llm-optimizer sweep (with --continue for checkpointing) ==="
+              mkdir -p /data/config-exploration/results/checkpoints/llm-optimizer
+              python3 -m experiments.run_all sweep --tool llm-optimizer --results-dir /data/config-exploration/results
+
+              echo "=== Sweep complete ==="
+              ls -lh /data/config-exploration/results/raw/llm-optimizer.json || true
+
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hf-secret
+                  key: HF_TOKEN
+            - name: HF_HOME
+              value: /workspace/.cache/huggingface
+            - name: HOME
+              value: /workspace
+            - name: CUDA_LAUNCH_BLOCKING
+              value: "1"
+            - name: VLLM_ATTENTION_BACKEND
+              value: FLASHINFER
+
+          resources:
+            limits:
+              nvidia.com/gpu: "8"
+              cpu: "32"
+              memory: "128Gi"
+            requests:
+              nvidia.com/gpu: "8"
+              cpu: "32"
+              memory: "128Gi"
+
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+            - name: data
+              mountPath: /data
+            - name: dshm
+              mountPath: /dev/shm
+
+      volumes:
+        - name: workspace
+          emptyDir: {}
+        - name: data
+          persistentVolumeClaim:
+            claimName: data-pvc
+        - name: dshm
+          emptyDir:
+            medium: Memory

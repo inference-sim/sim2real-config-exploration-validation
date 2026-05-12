@@ -1,0 +1,100 @@
+# Setup Job
+#
+# Builds the blis binary and generates canonical workloads for all estimators.
+# This job must complete successfully before running any sweep jobs.
+#
+# Purpose:
+#   - Install Python dependencies
+#   - Clone and build inference-sim (blis binary)
+#   - Clone this experiment repo
+#   - Run setup: generates canonical workloads in /data/config-exploration/results/workloads/
+#   - Copy blis binary to /data/config-exploration/bin/blis for reuse by sweep jobs
+#
+# Prerequisites:
+#   - PVC "data-pvc" exists in namespace jchen
+#
+# Usage:
+#   kubectl apply -f setup-job.yaml -n jchen
+#
+# To delete and retry:
+#   kubectl delete -f setup-job.yaml -n jchen
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: config-exploration-setup
+  namespace: jchen
+  labels:
+    app: config-exploration-setup
+    experiment: config-exploration
+    tool: setup
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 3600  # 1h hard cap
+  template:
+    metadata:
+      labels:
+        app: config-exploration-setup
+        experiment: config-exploration
+    spec:
+      restartPolicy: Never
+
+      containers:
+        - name: setup
+          image: golang:1.21-bullseye
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -euo pipefail
+
+              echo "=== Installing Python and dependencies ==="
+              apt-get update -qq && apt-get install -y -qq python3 python3-pip git >/dev/null 2>&1
+              pip3 install --no-cache-dir pydantic pyyaml >/dev/null 2>&1
+
+              echo "=== Cloning and building inference-sim ==="
+              cd /workspace
+              git clone https://github.com/inference-sim/inference-sim.git
+              cd inference-sim
+              go build -o blis ./cmd/blis
+              echo "=== blis binary built successfully ==="
+              ./blis --version || echo "(version command not available)"
+
+              echo "=== Cloning experiment repo ==="
+              cd /workspace
+              git clone https://github.com/inference-sim/sim2real-config-exploration-validation.git
+              cd sim2real-config-exploration-validation
+              git submodule update --init --recursive
+
+              echo "=== Running setup (generating canonical workloads) ==="
+              python3 -m experiments.run_all setup --results-dir /data/config-exploration/results
+
+              echo "=== Copying blis binary to data PVC ==="
+              mkdir -p /data/config-exploration/bin
+              cp /workspace/inference-sim/blis /data/config-exploration/bin/blis
+              chmod +x /data/config-exploration/bin/blis
+              ls -lh /data/config-exploration/bin/blis
+
+              echo "=== Setup complete ==="
+              ls -lR /data/config-exploration/results/workloads/ || true
+
+          resources:
+            limits:
+              cpu: "4"
+              memory: "8Gi"
+            requests:
+              cpu: "4"
+              memory: "8Gi"
+
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+            - name: data
+              mountPath: /data
+
+      volumes:
+        - name: workspace
+          emptyDir: {}
+        - name: data
+          persistentVolumeClaim:
+            claimName: data-pvc
