@@ -1,0 +1,37 @@
+{
+  "run_name": "test",
+  "scenario": "config-exploration-validation",
+  "phases": {
+    "init": {
+      "status": "done",
+      "timestamp": "2026-05-13T14:15:02.819960+00:00"
+    },
+    "context": {
+      "status": "done",
+      "timestamp": "2026-05-13T14:15:02.850715+00:00",
+      "hash": "730c1872ee77",
+      "cached": false,
+      "path": "/Users/kalantar/projects/go.workspace/src/github.com/inference-sim/sim2real-config-exploration-validation/sim2real/workspace/context/config-exploration-validation/730c1872ee77.md",
+      "context_file_prepared": true,
+      "context_file_populated": false
+    },
+    "translate": {
+      "status": "done",
+      "timestamp": "2026-05-13T14:15:02.851261+00:00",
+      "mode": "baseline-only"
+    },
+    "assembly": {
+      "status": "done",
+      "timestamp": "2026-05-13T17:22:42.177365+00:00",
+      "packages": [
+        "blis1",
+        "blis2",
+        "blis3"
+      ]
+    },
+    "summary": {
+      "status": "done",
+      "timestamp": "2026-05-13T17:22:42.178463+00:00"
+    }
+  }
+}

@@ -1,0 +1,39 @@
+{
+  "wl-w1-mid-blis1": {
+    "workload": "w1_mid",
+    "package": "blis1",
+    "status": "done",
+    "namespace": null,
+    "retries": 0,
+    "gpu_cost": 1,
+    "pending_stalls": 0,
+    "pending_since": null
+  },
+  "wl-w1-mid-blis2": {
+    "workload": "w1_mid",
+    "package": "blis2",
+    "status": "done",
+    "namespace": null,
+    "retries": 0,
+    "gpu_cost": 1,
+    "pending_stalls": 0,
+    "pending_since": null
+  },
+  "wl-w1-mid-blis3": {
+    "workload": "w1_mid",
+    "package": "blis3",
+    "status": "done",
+    "namespace": null,
+    "retries": 0,
+    "gpu_cost": 1,
+    "pending_stalls": 0,
+    "pending_since": null
+  },
+  "_orchestrator": {
+    "state": "normal",
+    "backoff_level": 0,
+    "last_scarcity_time": null,
+    "last_probe_free_gpus": 79,
+    "reclaim_times": []
+  }
+}

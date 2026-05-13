@@ -1,0 +1,63 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  name: blis1-w1-mid-test
+  namespace: kalantar-0
+spec:
+  params:
+  - name: experimentId
+    value: test
+  - name: runName
+    value: test
+  - name: namespace
+    value: kalantar-0
+  - name: phase
+    value: blis1
+  - name: scenarioContent
+    value: "scenario:\n- decode:\n    acceleratorType:\n      labelKey: nvidia.com/gpu.product\n\
+      \      labelValue: NVIDIA-H100-80GB-HBM3\n    replicas: 1\n    vllm:\n     \
+      \ additionalFlags:\n      - --max-num-seqs=256\n      - --max-num-batched-tokens=4096\n\
+      \      - --enable-chunked-prefill\n      - --no-enable-prefix-caching\n    \
+      \  - --dtype=bfloat16\n  huggingface:\n    secretName: hf-secret\n  model:\n\
+      \    blockSize: 32\n    gpuMemoryUtilization: 0.9\n    huggingfaceId: meta-llama/Llama-3.1-8B\n\
+      \    maxModelLen: 131072\n    name: meta-llama/Llama-3.1-8B\n    path: models/meta-llama/Llama-3.1-8B\n\
+      \    shortName: meta-llama-llama-3-1-8b\n    size: 1Ti\n  name: blis-1\n  vllmCommon:\n\
+      \    flags:\n      enforceEager: false\n"
+  - name: specContent
+    value: "base_dir: /workspace/source/llm-d-benchmark\n\nvalues_file:\n  path: /workspace/source/llm-d-benchmark/config/templates/values/defaults.yaml\n\
+      \ntemplate_dir:\n  path: /workspace/source/llm-d-benchmark/config/templates/jinja\n\
+      \nscenario_file:\n  path: /tmp/llmdbench-config/scenario.yaml\n"
+  - name: workloadName
+    value: w1_mid
+  - name: workloadSpec
+    value: "{aggregate_rate: 90, category: language, clients: [{arrival: {process:\
+      \ poisson}, id: critical,\n      input_distribution: {params: {max: 2048, mean:\
+      \ 1024, min: 256, std_dev: 256},\n        type: gaussian}, output_distribution:\
+      \ {params: {max: 512, mean: 256, min: 32,\n          std_dev: 64}, type: gaussian},\
+      \ rate_fraction: 0.5, slo_class: critical,\n      streaming: true}, {arrival:\
+      \ {process: poisson}, id: sheddable, input_distribution: {\n        params:\
+      \ {max: 2048, mean: 1024, min: 256, std_dev: 256}, type: gaussian},\n      output_distribution:\
+      \ {params: {max: 512, mean: 256, min: 32, std_dev: 64}, type: gaussian},\n \
+      \     rate_fraction: 0.5, slo_class: sheddable, streaming: true}], num_requests:\
+      \ 16200,\n  seed: 42, version: '2'}"
+  - name: benchmarkGitRepoUrl
+    value: https://github.com/llm-d/llm-d-benchmark.git
+  - name: benchmarkGitCommit
+    value: bfc5402a3deb0c41805f35f93cd755834ff5e27c
+  - name: blisGitRepoUrl
+    value: https://github.com/inference-sim/inference-sim.git
+  - name: blisGitCommit
+    value: d06d3015f381d541ace24edfcb5258d5aaf8fe9c
+  - name: model
+    value: meta-llama/Llama-3.1-8B
+  pipelineRef:
+    name: sim2real
+  timeouts:
+    pipeline: 4h
+  workspaces:
+  - name: data-storage
+    persistentVolumeClaim:
+      claimName: data-pvc
+  - name: source
+    persistentVolumeClaim:
+      claimName: source-pvc
