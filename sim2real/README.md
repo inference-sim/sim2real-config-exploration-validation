@@ -13,6 +13,7 @@ Sim2real translation bundle for the config-exploration-validation experiment. De
 From this directory, run the scenario generator against the parent repo's selection results:
 
 ```bash
+cd sim2real
 python generate_scenarios.py ../results/processed/top3_selection.json baselines
 ```
 
@@ -71,6 +72,8 @@ pip install -r $SIM2REAL/requirements.txt
 ```bash
 python $SIM2REAL/pipeline/setup.py --run $RUN
 ```
+
+_Note: Accept defaults for any options.
 
 Where `$RUN` is the run identifier (e.g., `run-001`).
 
