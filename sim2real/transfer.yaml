@@ -1,0 +1,14 @@
+kind: sim2real-transfer
+
+scenario: config-exploration-validation
+
+baselines:
+  - name: blis-1
+    scenario: baselines/blis-1.yaml
+  - name: blis-2
+    scenario: baselines/blis-2.yaml
+  - name: blis-3
+    scenario: baselines/blis-3.yaml
+
+workloads:
+  - workloads/w1_mid.yaml
