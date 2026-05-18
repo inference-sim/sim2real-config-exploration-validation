@@ -4,7 +4,7 @@ Sim2real translation bundle for the config-exploration-validation experiment. De
 
 ## Prerequisites
 
-- Access to the sim2real pipeline repo (set `$SIM2REAL` to its root)
+- A local copy of the sim2real pipeline repo (https://github.com/inference-sim/sim2real) 
 - Python 3.11+
 - Cluster access configured for llm-d-benchmark
 
@@ -51,15 +51,18 @@ _Note: baseline names cannot contain hyphens._
 
 ### Setup
 
+Set environment variables
+
 ```bash
 export SIM2REAL=/path/to/chekout/of/inference-sim/sim2real
 
 export NAMESPACES="comma,separated,list,of,namespaces"
-export HF_TOKEN=<huggingface token >
+export HF_TOKEN=<huggingface token with access to required models>
 
 export RUN=<run_name>
 ```
 
+Set up Python virtual environment:
 
 ```bash
 python3 -m venv .venv
@@ -70,7 +73,7 @@ pip install -r $SIM2REAL/requirements.txt
 ### Initialize the run
 
 ```bash
-python $SIM2REAL/pipeline/setup.py --run $RUN
+python $SIM2REAL/pipeline/setup.py --run $RUN [--no-cluster]
 ```
 
 _Note: Accept defaults for any options.
@@ -80,22 +83,35 @@ Where `$RUN` is the run identifier (e.g., `run-001`).
 ### Prepare artifacts
 
 ```bash
-python $SIM2REAL/pipeline/prepare.py
+python $SIM2REAL/pipeline/prepare.py [assemble]
 ```
 
 ### Deploy and execute
 
-Run all workloads:
+Run all workloads remotely:
 
 ```bash
-python $SIM2REAL/pipeline/deploy.py run --skip-build-epp
+python $SIM2REAL/pipeline/deploy.py run --skip-build-epp --remote
 ```
 
-Selective execution:
+A subset of pairs can be run using the `--only`, `--packages` and `--workload` options.
 
-```bash
-# To see status:
+Follow real-time progress, if desired:
+
+```shell
+k logs -f job/sim2real-orchestrator
+```
+
+See the status of all pairs:
+
+```shell
 python $SIM2REAL/pipeline/deploy.py status
+```
+
+At any time you can collect results from completed executions. This only collects data that has not already been collected:
+
+```shell
+python $SIM2REAL/pipeline/deploy.py collect
 ```
 
 ## 4. Analyze Results
@@ -109,3 +125,35 @@ claude --dangerously-skip-permissions --add-dir $SIM2REAL
 Then use the `/sim2real-analyze` command to generate per-workload latency comparison tables (TTFT/TPOT/E2E baseline vs treatment), charts, and HTML reports.
 
 Corresponding simulation data is available in `../results/raw/`.
+
+## Troubleshooting
+
+Follow progress of tasks:
+
+```shell
+watch tkn tr list -n <namespace>
+```
+
+Prevent llmdbenchmark teardown. This allows you to debug the infernce engines.
+
+```shell
+python $SIM2REAL/pipeline/deploy.py run --skip-build-epp --remote --skip-teardown
+```
+
+Stop orchestration:
+
+```shell
+python $SIM2REAL/pipeline/deploy.py stop
+```
+
+Cleanup any cluster artifacts (`PipelineRun` objects and deployed helm charts):
+
+```shell
+python $SIM2REAL/pipeline/deploy.py reset
+```
+
+Erase any collected data:
+
+```shell
+python $SIM2REAL/pipeline/deploy.py wipe
+```
