@@ -1,22 +1,24 @@
-# BLIS (inference-sim) Config Sweep Job
+# BLIS (inference-sim) Parallel Config Sweep - Indexed Job
 #
-# Runs inference-sim config sweep across 1,408 configs (CPU-only, no GPU required).
-# Uses the blis binary built by setup-job or rebuilds if needed.
-#
-# Purpose:
-#   - Prune config space if needed (removes invalid or OOM configs)
-#   - Sweep all valid configs with blis (single-point evaluator, external sweep loop)
-#   - Results written to /data/config-exploration/results/raw/blis.json
+# Runs the full 97,920-config sweep in parallel across 512 pods.
+# Each pod evaluates its shard (~192 configs) with binary rate search at 10k requests.
+# Results written to per-shard files on data-pvc, aggregated by blis-aggregate.yaml.
 #
 # Prerequisites:
-#   - setup-job has completed successfully
-#   - PVC "data-pvc" exists in namespace jchen with workloads at /data/config-exploration/results/workloads/
+#   - setup-job has completed (blis binary at /data/config-exploration/bin/blis)
+#   - PVC "data-pvc" exists in namespace jchen
 #
 # Usage:
-#   kubectl apply -f blis-sweep.yaml -n jchen
+#   kubectl apply -f k8s/blis-sweep.yaml -n jchen
+#
+# Monitor:
+#   kubectl get jobs blis-sweep -n jchen -w
+#   kubectl logs -l job-name=blis-sweep -n jchen --tail=5
+#
+# After completion, run blis-aggregate.yaml to concatenate shard files.
 #
 # To delete and retry:
-#   kubectl delete -f blis-sweep.yaml -n jchen
+#   kubectl delete -f k8s/blis-sweep.yaml -n jchen
 
 ---
 apiVersion: batch/v1
@@ -29,8 +31,11 @@ metadata:
     experiment: config-exploration
     tool: blis
 spec:
-  backoffLimit: 2
-  activeDeadlineSeconds: 43200  # 12h hard cap
+  completionMode: Indexed
+  completions: 512
+  parallelism: 512
+  backoffLimit: 20
+  activeDeadlineSeconds: 86400  # 24h hard cap
   template:
     metadata:
       labels:
@@ -48,52 +53,40 @@ spec:
             - |
               set -euo pipefail
 
-              echo "=== Installing dependencies ==="
-              apt-get update -qq && apt-get install -y -qq git wget >/dev/null 2>&1
               pip install --no-cache-dir pydantic pyyaml >/dev/null 2>&1
 
-              echo "=== Installing Go 1.21 ==="
-              wget -q https://go.dev/dl/go1.21.0.linux-amd64.tar.gz
-              tar -C /usr/local -xzf go1.21.0.linux-amd64.tar.gz
-              export PATH=$PATH:/usr/local/go/bin
-              go version
+              cd /data/config-exploration/code
 
-              echo "=== Checking for pre-built blis binary ==="
-              if [ -f /data/config-exploration/bin/blis ]; then
-                echo "Using pre-built blis binary from setup-job"
-                export PATH=/data/config-exploration/bin:$PATH
-              else
-                echo "Building blis binary (setup-job may not have run)"
-                cd /workspace
-                git clone https://github.com/inference-sim/inference-sim.git
-                cd inference-sim
-                go build -o blis ./cmd/blis
-                export PATH=/workspace/inference-sim:$PATH
-              fi
-              blis --version || echo "(version command not available)"
+              echo "=== Shard ${JOB_COMPLETION_INDEX}/${TOTAL_COMPLETIONS} starting ==="
+              python3 -m experiments.runners.blis_shard
+              echo "=== Shard ${JOB_COMPLETION_INDEX} complete ==="
 
-              echo "=== Cloning experiment repo ==="
-              cd /workspace
-              git clone https://github.com/inference-sim/sim2real-config-exploration-validation.git
-              cd sim2real-config-exploration-validation
-              git submodule update --init --recursive
-
-              echo "=== Running prune (if needed) ==="
-              python3 -m experiments.run_all prune --tool blis --results-dir /data/config-exploration/results
-
-              echo "=== Running BLIS sweep ==="
-              python3 -m experiments.run_all sweep --tool blis --results-dir /data/config-exploration/results
-
-              echo "=== Sweep complete ==="
-              ls -lh /data/config-exploration/results/raw/blis.json || true
+          env:
+            - name: TOTAL_COMPLETIONS
+              value: "512"
+            - name: BLIS_BINARY
+              value: "/data/config-exploration/bin/blis"
+            - name: DEFAULTS_FILEPATH
+              value: "/data/config-exploration/defaults.yaml"
+            - name: RESULTS_DIR
+              value: "/data/config-exploration/results/raw/blis-sweep-v3"
+            - name: HARDWARE_CONFIG
+              value: "/data/config-exploration/hardware_config.json"
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hf-secret
+                  key: HF_TOKEN
+            - name: HF_HUB_DISABLE_TELEMETRY
+              value: "1"
 
           resources:
-            limits:
-              cpu: "8"
-              memory: "16Gi"
             requests:
-              cpu: "8"
-              memory: "16Gi"
+              cpu: "1"
+              memory: "1Gi"
+            limits:
+              cpu: "1"
+              memory: "2Gi"
 
           volumeMounts:
             - name: workspace

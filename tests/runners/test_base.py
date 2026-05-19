@@ -20,7 +20,7 @@ def _make_workload():
 def _make_vllm_args(**overrides):
     defaults = dict(
         tensor_parallel_size=2, pipeline_parallel_size=1,
-        num_instances=1, data_parallel_size=1,
+        num_replicas=1, data_parallel_size=1,
         max_num_seqs=128, max_num_batched_tokens=4096,
         enable_chunked_prefill=False, block_size=16,
     )

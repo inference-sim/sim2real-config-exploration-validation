@@ -6,7 +6,7 @@
         "model": "meta-llama/Llama-3.1-8B",
         "hardware": "H100_SXM_80GB",
         "preset": "chatbot",
-        "num_requests": 500,
+        "num_requests": 10000,
         "isl_mean": 512,
         "isl_max": 2048,
         "osl_mean": 256,
@@ -17,12 +17,138 @@
         "trace_file": null
       },
       "vllm_args": {
-        "tensor_parallel_size": 1,
+        "tensor_parallel_size": 2,
         "pipeline_parallel_size": 1,
-        "num_instances": 1,
+        "num_replicas": 1,
+        "data_parallel_size": 1,
+        "max_num_seqs": 512,
+        "max_num_batched_tokens": 4096,
+        "enable_chunked_prefill": false,
+        "block_size": 32,
+        "gpu_memory_utilization": 0.9,
+        "dtype": "bfloat16",
+        "kv_cache_dtype": "auto",
+        "enable_prefix_caching": false,
+        "enforce_eager": false,
+        "swap_space": 4
+      },
+      "routing_config": null,
+      "tool_config": {
+        "scheduler": "sjf",
+        "admission_policy": null,
+        "preemption_policy": "fcfs",
+        "max_concurrency": null,
+        "vidur_scheduler_type": null
+      },
+      "results": {
+        "max_throughput_tok_s": 26445.19889722496,
+        "max_throughput_qps": 104.19659062503679,
+        "ttft_mean_ms": 185.244372,
+        "ttft_p50_ms": null,
+        "ttft_p99_ms": 1924.1438499999997,
+        "tpot_mean_ms": 12.149822109089758,
+        "meets_slo": true,
+        "cost_per_hour": 6.4,
+        "cost_per_1k_tokens": 6.722497284618003e-05
+      },
+      "metadata": {
+        "status": "ok",
+        "tool_version": null,
+        "wall_clock_seconds": null,
+        "num_rate_probes": 1,
+        "config_hash": "3246cf8a",
+        "timestamp": "2026-05-19T15:52:40Z",
+        "fitness_score": 0.204318,
+        "search_phase": 0,
+        "search_profile_idx": null
+      }
+    },
+    {
+      "tool": "inference-sim",
+      "workload": {
+        "model": "meta-llama/Llama-3.1-8B",
+        "hardware": "H100_SXM_80GB",
+        "preset": "chatbot",
+        "num_requests": 10000,
+        "isl_mean": 512,
+        "isl_max": 2048,
+        "osl_mean": 256,
+        "osl_max": 1024,
+        "arrival_pattern": "poisson",
+        "slo_ttft_mean_ms": 300,
+        "seed": 42,
+        "trace_file": null
+      },
+      "vllm_args": {
+        "tensor_parallel_size": 4,
+        "pipeline_parallel_size": 1,
+        "num_replicas": 1,
+        "data_parallel_size": 1,
+        "max_num_seqs": 512,
+        "max_num_batched_tokens": 2048,
+        "enable_chunked_prefill": false,
+        "block_size": 32,
+        "gpu_memory_utilization": 0.9,
+        "dtype": "bfloat16",
+        "kv_cache_dtype": "auto",
+        "enable_prefix_caching": false,
+        "enforce_eager": false,
+        "swap_space": 4
+      },
+      "routing_config": null,
+      "tool_config": {
+        "scheduler": "sjf",
+        "admission_policy": null,
+        "preemption_policy": "fcfs",
+        "max_concurrency": null,
+        "vidur_scheduler_type": null
+      },
+      "results": {
+        "max_throughput_tok_s": 36561.36133344435,
+        "max_throughput_qps": 144.05522962259548,
+        "ttft_mean_ms": 24.179789,
+        "ttft_p50_ms": null,
+        "ttft_p99_ms": 29.10437,
+        "tpot_mean_ms": 5.926634419958782,
+        "meets_slo": true,
+        "cost_per_hour": 12.8,
+        "cost_per_1k_tokens": 9.72489925396494e-05
+      },
+      "metadata": {
+        "status": "ok",
+        "tool_version": null,
+        "wall_clock_seconds": null,
+        "num_rate_probes": 1,
+        "config_hash": "01e8fe9e",
+        "timestamp": "2026-05-19T15:52:42Z",
+        "fitness_score": 0.246171,
+        "search_phase": 0,
+        "search_profile_idx": null
+      }
+    },
+    {
+      "tool": "inference-sim",
+      "workload": {
+        "model": "meta-llama/Llama-3.1-8B",
+        "hardware": "H100_SXM_80GB",
+        "preset": "chatbot",
+        "num_requests": 10000,
+        "isl_mean": 512,
+        "isl_max": 2048,
+        "osl_mean": 256,
+        "osl_max": 1024,
+        "arrival_pattern": "poisson",
+        "slo_ttft_mean_ms": 300,
+        "seed": 42,
+        "trace_file": null
+      },
+      "vllm_args": {
+        "tensor_parallel_size": 8,
+        "pipeline_parallel_size": 1,
+        "num_replicas": 1,
         "data_parallel_size": 1,
         "max_num_seqs": 256,
-        "max_num_batched_tokens": 4096,
+        "max_num_batched_tokens": 8192,
         "enable_chunked_prefill": true,
         "block_size": 32,
         "gpu_memory_utilization": 0.9,
@@ -41,151 +167,26 @@
         "vidur_scheduler_type": null
       },
       "results": {
-        "max_throughput_tok_s": 7388.824392344399,
-        "max_throughput_qps": 27.1875,
-        "ttft_mean_ms": 296.30081800000005,
+        "max_throughput_tok_s": 41660.49750120073,
+        "max_throughput_qps": 164.1463095149378,
+        "ttft_mean_ms": 20.414831,
         "ttft_p50_ms": null,
-        "ttft_p99_ms": 4261.41929,
-        "tpot_mean_ms": 19.6141142793764,
+        "ttft_p99_ms": 22.31617,
+        "tpot_mean_ms": 3.28295880949838,
         "meets_slo": true,
-        "cost_per_hour": 3.2,
-        "cost_per_1k_tokens": 0.00012030180197676259
+        "cost_per_hour": 25.6,
+        "cost_per_1k_tokens": 0.00017069193931028206
       },
       "metadata": {
         "status": "ok",
         "tool_version": null,
-        "wall_clock_seconds": 1.8790516671724617,
-        "num_rate_probes": 11,
-        "config_hash": "66836759",
-        "timestamp": "2026-05-12T18:20:17Z"
-      }
-    },
-    {
-      "tool": "inference-sim",
-      "workload": {
-        "model": "meta-llama/Llama-3.1-8B",
-        "hardware": "H100_SXM_80GB",
-        "preset": "chatbot",
-        "num_requests": 500,
-        "isl_mean": 512,
-        "isl_max": 2048,
-        "osl_mean": 256,
-        "osl_max": 1024,
-        "arrival_pattern": "poisson",
-        "slo_ttft_mean_ms": 300,
-        "seed": 42,
-        "trace_file": null
-      },
-      "vllm_args": {
-        "tensor_parallel_size": 1,
-        "pipeline_parallel_size": 1,
-        "num_instances": 2,
-        "data_parallel_size": 1,
-        "max_num_seqs": 512,
-        "max_num_batched_tokens": 8192,
-        "enable_chunked_prefill": true,
-        "block_size": 32,
-        "gpu_memory_utilization": 0.9,
-        "dtype": "bfloat16",
-        "kv_cache_dtype": "auto",
-        "enable_prefix_caching": false,
-        "enforce_eager": false,
-        "swap_space": 4
-      },
-      "routing_config": {
-        "strategy": "round-robin",
-        "scorers": null,
-        "picker": null
-      },
-      "tool_config": {
-        "scheduler": "fcfs",
-        "admission_policy": "always-admit",
-        "preemption_policy": "priority",
-        "max_concurrency": null,
-        "vidur_scheduler_type": null
-      },
-      "results": {
-        "max_throughput_tok_s": 14109.061934089794,
-        "max_throughput_qps": 9980.9375,
-        "ttft_mean_ms": 253.039984,
-        "ttft_p50_ms": null,
-        "ttft_p99_ms": 491.036,
-        "tpot_mean_ms": 18.369369110905286,
-        "meets_slo": true,
-        "cost_per_hour": 6.4,
-        "cost_per_1k_tokens": 0.0001260025497146892
-      },
-      "metadata": {
-        "status": "ok",
-        "tool_version": null,
-        "wall_clock_seconds": 2.322992583271116,
-        "num_rate_probes": 18,
-        "config_hash": "26822160",
-        "timestamp": "2026-05-12T18:21:03Z"
-      }
-    },
-    {
-      "tool": "inference-sim",
-      "workload": {
-        "model": "meta-llama/Llama-3.1-8B",
-        "hardware": "H100_SXM_80GB",
-        "preset": "chatbot",
-        "num_requests": 500,
-        "isl_mean": 512,
-        "isl_max": 2048,
-        "osl_mean": 256,
-        "osl_max": 1024,
-        "arrival_pattern": "poisson",
-        "slo_ttft_mean_ms": 300,
-        "seed": 42,
-        "trace_file": null
-      },
-      "vllm_args": {
-        "tensor_parallel_size": 1,
-        "pipeline_parallel_size": 1,
-        "num_instances": 3,
-        "data_parallel_size": 1,
-        "max_num_seqs": 256,
-        "max_num_batched_tokens": 8192,
-        "enable_chunked_prefill": false,
-        "block_size": 16,
-        "gpu_memory_utilization": 0.9,
-        "dtype": "bfloat16",
-        "kv_cache_dtype": "auto",
-        "enable_prefix_caching": false,
-        "enforce_eager": false,
-        "swap_space": 4
-      },
-      "routing_config": {
-        "strategy": "round-robin",
-        "scorers": null,
-        "picker": null
-      },
-      "tool_config": {
-        "scheduler": "reverse-priority",
-        "admission_policy": "always-admit",
-        "preemption_policy": "fcfs",
-        "max_concurrency": null,
-        "vidur_scheduler_type": null
-      },
-      "results": {
-        "max_throughput_tok_s": 16813.213645518463,
-        "max_throughput_qps": 9980.9375,
-        "ttft_mean_ms": 164.714734,
-        "ttft_p50_ms": null,
-        "ttft_p99_ms": 291.71,
-        "tpot_mean_ms": 14.547449847835054,
-        "meets_slo": true,
-        "cost_per_hour": 9.600000000000001,
-        "cost_per_1k_tokens": 0.00015860541136806781
-      },
-      "metadata": {
-        "status": "ok",
-        "tool_version": null,
-        "wall_clock_seconds": 2.871428208425641,
-        "num_rate_probes": 18,
-        "config_hash": "34820808",
-        "timestamp": "2026-05-12T18:21:38Z"
+        "wall_clock_seconds": null,
+        "num_rate_probes": 1,
+        "config_hash": "e46e08fd",
+        "timestamp": "2026-05-19T15:52:43Z",
+        "fitness_score": 0.261624,
+        "search_phase": 0,
+        "search_profile_idx": null
       }
     }
   ],
@@ -209,10 +210,10 @@
       "vllm_args": {
         "tensor_parallel_size": 1,
         "pipeline_parallel_size": 1,
-        "num_instances": 1,
+        "num_replicas": 1,
         "data_parallel_size": 1,
-        "max_num_seqs": 256,
-        "max_num_batched_tokens": 196608,
+        "max_num_seqs": 320,
+        "max_num_batched_tokens": 245760,
         "enable_chunked_prefill": false,
         "block_size": 16,
         "gpu_memory_utilization": 0.9,
@@ -231,23 +232,26 @@
         "vidur_scheduler_type": null
       },
       "results": {
-        "max_throughput_tok_s": 9559.1,
-        "max_throughput_qps": 37.487,
-        "ttft_mean_ms": 106.705,
+        "max_throughput_tok_s": 10770.139,
+        "max_throughput_qps": 42.236,
+        "ttft_mean_ms": 146.832,
         "ttft_p50_ms": null,
         "ttft_p99_ms": null,
-        "tpot_mean_ms": 26.676,
+        "tpot_mean_ms": 29.511,
         "meets_slo": true,
         "cost_per_hour": 3.2,
-        "cost_per_1k_tokens": 9.298876347029417e-05
+        "cost_per_1k_tokens": 8.253272208361368e-05
       },
       "metadata": {
         "status": "ok",
         "tool_version": null,
         "wall_clock_seconds": null,
         "num_rate_probes": null,
-        "config_hash": "a5349128",
-        "timestamp": "2026-05-12T18:21:05Z"
+        "config_hash": "26341185",
+        "timestamp": "2026-05-19T15:19:07Z",
+        "fitness_score": null,
+        "search_phase": null,
+        "search_profile_idx": null
       }
     },
     {
@@ -269,10 +273,10 @@
       "vllm_args": {
         "tensor_parallel_size": 1,
         "pipeline_parallel_size": 1,
-        "num_instances": 2,
+        "num_replicas": 2,
         "data_parallel_size": 1,
-        "max_num_seqs": 256,
-        "max_num_batched_tokens": 196608,
+        "max_num_seqs": 320,
+        "max_num_batched_tokens": 245760,
         "enable_chunked_prefill": false,
         "block_size": 16,
         "gpu_memory_utilization": 0.9,
@@ -295,23 +299,26 @@
         "vidur_scheduler_type": null
       },
       "results": {
-        "max_throughput_tok_s": 19118.2,
-        "max_throughput_qps": 74.974,
-        "ttft_mean_ms": 106.705,
+        "max_throughput_tok_s": 21540.278,
+        "max_throughput_qps": 84.472,
+        "ttft_mean_ms": 146.832,
         "ttft_p50_ms": null,
         "ttft_p99_ms": null,
-        "tpot_mean_ms": 26.676,
+        "tpot_mean_ms": 29.511,
         "meets_slo": true,
         "cost_per_hour": 6.4,
-        "cost_per_1k_tokens": 9.298876347029417e-05
+        "cost_per_1k_tokens": 8.253272208361368e-05
       },
       "metadata": {
         "status": "ok",
         "tool_version": null,
         "wall_clock_seconds": null,
         "num_rate_probes": null,
-        "config_hash": "a2b8a486",
-        "timestamp": "2026-05-12T18:22:18Z"
+        "config_hash": "3a827667",
+        "timestamp": "2026-05-19T15:19:13Z",
+        "fitness_score": null,
+        "search_phase": null,
+        "search_profile_idx": null
       }
     },
     {
@@ -333,10 +340,10 @@
       "vllm_args": {
         "tensor_parallel_size": 1,
         "pipeline_parallel_size": 1,
-        "num_instances": 3,
+        "num_replicas": 3,
         "data_parallel_size": 1,
-        "max_num_seqs": 256,
-        "max_num_batched_tokens": 196608,
+        "max_num_seqs": 320,
+        "max_num_batched_tokens": 245760,
         "enable_chunked_prefill": false,
         "block_size": 16,
         "gpu_memory_utilization": 0.9,
@@ -359,23 +366,95 @@
         "vidur_scheduler_type": null
       },
       "results": {
-        "max_throughput_tok_s": 28677.300000000003,
-        "max_throughput_qps": 112.46100000000001,
-        "ttft_mean_ms": 106.705,
+        "max_throughput_tok_s": 32310.416999999998,
+        "max_throughput_qps": 126.708,
+        "ttft_mean_ms": 146.832,
         "ttft_p50_ms": null,
         "ttft_p99_ms": null,
-        "tpot_mean_ms": 26.676,
+        "tpot_mean_ms": 29.511,
         "meets_slo": true,
         "cost_per_hour": 9.600000000000001,
-        "cost_per_1k_tokens": 9.298876347029417e-05
+        "cost_per_1k_tokens": 8.25327220836137e-05
       },
       "metadata": {
         "status": "ok",
         "tool_version": null,
         "wall_clock_seconds": null,
         "num_rate_probes": null,
-        "config_hash": "0f142388",
-        "timestamp": "2026-05-12T18:23:32Z"
+        "config_hash": "ffae88cd",
+        "timestamp": "2026-05-19T15:19:20Z",
+        "fitness_score": null,
+        "search_phase": null,
+        "search_profile_idx": null
+      }
+    }
+  ],
+  "vidur": [
+    {
+      "tool": "Vidur",
+      "workload": {
+        "model": "meta-llama/Llama-3.1-8B",
+        "hardware": "H100_SXM_80GB",
+        "preset": "chatbot",
+        "num_requests": 10000,
+        "isl_mean": 512,
+        "isl_max": 2048,
+        "osl_mean": 256,
+        "osl_max": 1024,
+        "arrival_pattern": "poisson",
+        "slo_ttft_mean_ms": 300,
+        "seed": 42,
+        "trace_file": null
+      },
+      "vllm_args": {
+        "tensor_parallel_size": 1,
+        "pipeline_parallel_size": 1,
+        "num_replicas": 8,
+        "data_parallel_size": 1,
+        "max_num_seqs": 128,
+        "max_num_batched_tokens": 4096,
+        "enable_chunked_prefill": false,
+        "block_size": 16,
+        "gpu_memory_utilization": 0.9,
+        "dtype": "bfloat16",
+        "kv_cache_dtype": "auto",
+        "enable_prefix_caching": false,
+        "enforce_eager": false,
+        "swap_space": 4
+      },
+      "routing_config": {
+        "strategy": "round-robin",
+        "scorers": null,
+        "picker": null
+      },
+      "tool_config": {
+        "scheduler": null,
+        "admission_policy": null,
+        "preemption_policy": null,
+        "max_concurrency": null,
+        "vidur_scheduler_type": "vllm"
+      },
+      "results": {
+        "max_throughput_tok_s": 2940.0,
+        "max_throughput_qps": 11.484375,
+        "ttft_mean_ms": 29956.366797542007,
+        "ttft_p50_ms": 30556.989274148757,
+        "ttft_p99_ms": 49644.36006542599,
+        "tpot_mean_ms": null,
+        "meets_slo": true,
+        "cost_per_hour": 25.6,
+        "cost_per_1k_tokens": 0.0024187452758881326
+      },
+      "metadata": {
+        "status": "ok",
+        "tool_version": null,
+        "wall_clock_seconds": 38.597519874572754,
+        "num_rate_probes": 12,
+        "config_hash": "07eb1c57",
+        "timestamp": "2026-05-19T16:06:17Z",
+        "fitness_score": null,
+        "search_phase": null,
+        "search_profile_idx": null
       }
     }
   ],
@@ -399,7 +478,7 @@
       "vllm_args": {
         "tensor_parallel_size": 1,
         "pipeline_parallel_size": 1,
-        "num_instances": 1,
+        "num_replicas": 1,
         "data_parallel_size": 1,
         "max_num_seqs": 16,
         "max_num_batched_tokens": 12288,
@@ -436,8 +515,11 @@
         "tool_version": null,
         "wall_clock_seconds": null,
         "num_rate_probes": null,
-        "config_hash": "d67393bf",
-        "timestamp": "2026-05-12T18:02:49Z"
+        "config_hash": "aa7c635d",
+        "timestamp": "2026-05-19T15:20:19Z",
+        "fitness_score": null,
+        "search_phase": null,
+        "search_profile_idx": null
       }
     },
     {
@@ -459,7 +541,7 @@
       "vllm_args": {
         "tensor_parallel_size": 2,
         "pipeline_parallel_size": 1,
-        "num_instances": 1,
+        "num_replicas": 1,
         "data_parallel_size": 1,
         "max_num_seqs": 32,
         "max_num_batched_tokens": 24576,
@@ -496,8 +578,11 @@
         "tool_version": null,
         "wall_clock_seconds": null,
         "num_rate_probes": null,
-        "config_hash": "c752999e",
-        "timestamp": "2026-05-12T18:02:49Z"
+        "config_hash": "390b2613",
+        "timestamp": "2026-05-19T15:20:19Z",
+        "fitness_score": null,
+        "search_phase": null,
+        "search_profile_idx": null
       }
     },
     {
@@ -519,7 +604,7 @@
       "vllm_args": {
         "tensor_parallel_size": 3,
         "pipeline_parallel_size": 1,
-        "num_instances": 1,
+        "num_replicas": 1,
         "data_parallel_size": 1,
         "max_num_seqs": 64,
         "max_num_batched_tokens": 49152,
@@ -556,8 +641,11 @@
         "tool_version": null,
         "wall_clock_seconds": null,
         "num_rate_probes": null,
-        "config_hash": "bd633745",
-        "timestamp": "2026-05-12T18:02:49Z"
+        "config_hash": "aa81adf6",
+        "timestamp": "2026-05-19T15:20:20Z",
+        "fitness_score": null,
+        "search_phase": null,
+        "search_profile_idx": null
       }
     }
   ]

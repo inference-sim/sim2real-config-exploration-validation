@@ -1,0 +1,173 @@
+# Vidur Profiler Job - Meta-Llama-3-8B on H100
+#
+# Profiles Meta-Llama-3-8B on H100 for Vidur's execution time predictor.
+# Produces mlp.csv and attention.csv needed by Vidur's RandomForrest predictor.
+# Requires sarathi-serve (vidur branch) as the profiling backend.
+#
+# 4 GPUs requested; Ray distributes profiling shots across workers in parallel.
+#
+# Prerequisites:
+#   - Secret "hf-secret" with key "HF_TOKEN" exists in namespace jchen
+#   - PVC "data-pvc" exists in namespace jchen
+#
+# Usage:
+#   kubectl apply -f vidur-profiler.yaml -n jchen
+#
+# To delete and retry:
+#   kubectl delete -f vidur-profiler.yaml -n jchen
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: vidur-profiler
+  namespace: jchen
+  labels:
+    app: vidur-profiler
+    experiment: config-exploration
+    model: meta-llama-3-8b
+spec:
+  backoffLimit: 3
+  activeDeadlineSeconds: 28800  # 8h hard cap (4 GPU workers, ~3.5h estimated)
+  template:
+    metadata:
+      labels:
+        app: vidur-profiler
+        model: meta-llama-3-8b
+    spec:
+      restartPolicy: Never
+
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: nvidia.com/gpu.product
+                    operator: In
+                    values:
+                      - NVIDIA-H100-80GB-HBM3
+
+      containers:
+        - name: profiler
+          image: nvidia/cuda:12.1.0-devel-ubuntu22.04
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -euo pipefail
+
+              DEST=/data/vidur-profiler/h100/meta-llama/Meta-Llama-3-8B
+              mkdir -p "$DEST"
+
+              copy_partial() {
+                echo "=== Copying partial results to data PVC ==="
+                find /workspace/vidur/profiling_outputs -name "*.csv" -exec cp {} "$DEST/" \; 2>/dev/null || true
+                ls -lh "$DEST/" 2>/dev/null || true
+              }
+              trap copy_partial EXIT
+
+              echo "=== Installing system dependencies ==="
+              apt-get update -qq && apt-get install -y -qq git build-essential cmake ninja-build python3 python3-pip >/dev/null 2>&1
+              ln -sf /usr/bin/python3 /usr/bin/python
+
+              echo "=== Installing PyTorch 2.4 + CUDA 12.1 ==="
+              pip install --no-cache-dir torch==2.4.0 --index-url https://download.pytorch.org/whl/cu121 2>&1 | tail -5
+
+              echo "=== Installing flashinfer ==="
+              pip install --no-cache-dir flashinfer==0.1.6 -i https://flashinfer.ai/whl/cu121/torch2.4/ 2>&1 | tail -5
+
+              echo "=== Installing sarathi deps ==="
+              pip install --no-cache-dir \
+                "transformers>=4.40,<5" accelerate sentencepiece protobuf \
+                plotly plotly_express wandb uvicorn ddsketch \
+                fasteners scipy statsmodels seaborn matplotlib pandas \
+                pydantic tiktoken openai gitpython logistro tqdm pyyaml \
+                "ray[default]==2.9.3" 2>&1 | tail -5
+
+              echo "=== Cloning sarathi-serve (vidur branch) ==="
+              cd /workspace
+              git clone --branch vidur https://github.com/microsoft/sarathi-serve.git
+              cd sarathi-serve
+              echo "=== Installing sarathi-serve (no-deps to preserve system torch) ==="
+              pip install --no-cache-dir --no-deps -e . 2>&1 | tail -10
+
+              echo "=== Cloning Vidur ==="
+              cd /workspace
+              git clone https://github.com/microsoft/vidur.git
+              cd vidur
+              echo "=== Installing Vidur ==="
+              pip install --no-cache-dir --no-deps -e . 2>&1 | tail -10
+
+              echo "=== Running MLP profiling (4 GPU workers) ==="
+              python vidur/profiling/mlp/main.py \
+                --models meta-llama/Meta-Llama-3-8B \
+                --num_gpus 4 \
+                --output_dir /workspace/vidur/profiling_outputs
+
+              # Copy MLP results immediately
+              MLP_CSV=$(find /workspace/vidur/profiling_outputs/mlp -name "mlp.csv" -path "*/Meta-Llama-3-8B/*" | head -1)
+              if [ -n "$MLP_CSV" ]; then
+                cp "$MLP_CSV" "$DEST/mlp.csv"
+                echo "=== MLP profiling complete: $(wc -l < "$DEST/mlp.csv") rows ==="
+              else
+                echo "WARNING: mlp.csv not found after MLP profiling"
+              fi
+
+              echo "=== Running attention profiling (4 GPU workers, TP 1/2/4) ==="
+              python vidur/profiling/attention/main.py \
+                --models meta-llama/Meta-Llama-3-8B \
+                --num_gpus 4 \
+                --num_tensor_parallel_workers 1 2 4 \
+                --output_dir /workspace/vidur/profiling_outputs
+
+              # Copy attention results
+              ATTN_CSV=$(find /workspace/vidur/profiling_outputs/attention -name "attention.csv" -path "*/Meta-Llama-3-8B/*" | head -1)
+              if [ -n "$ATTN_CSV" ]; then
+                cp "$ATTN_CSV" "$DEST/attention.csv"
+                echo "=== Attention profiling complete: $(wc -l < "$DEST/attention.csv") rows ==="
+              else
+                echo "WARNING: attention.csv not found after attention profiling"
+              fi
+
+              echo "=== All profiling complete ==="
+              ls -lh "$DEST/"
+
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hf-secret
+                  key: HF_TOKEN
+            - name: HF_HOME
+              value: /workspace/.cache/huggingface
+            - name: HOME
+              value: /workspace
+            - name: RAY_NUM_CPUS
+              value: "16"
+
+          resources:
+            limits:
+              nvidia.com/gpu: "4"
+              cpu: "16"
+              memory: "128Gi"
+            requests:
+              nvidia.com/gpu: "4"
+              cpu: "16"
+              memory: "64Gi"
+
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+            - name: data
+              mountPath: /data
+            - name: dshm
+              mountPath: /dev/shm
+
+      volumes:
+        - name: workspace
+          emptyDir: {}
+        - name: data
+          persistentVolumeClaim:
+            claimName: data-pvc
+        - name: dshm
+          emptyDir:
+            medium: Memory

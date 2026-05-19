@@ -82,7 +82,7 @@ class BaseRunner(ABC):
         return VllmArgs(
             tensor_parallel_size=config.get("tp", 1),
             pipeline_parallel_size=config.get("pp", 1),
-            num_instances=config.get("replicas", 1),
+            num_replicas=config.get("replicas", 1),
             data_parallel_size=config.get("dp", 1),
             max_num_seqs=config.get("max_num_seqs", 128),
             max_num_batched_tokens=config.get("max_batched_tokens", 4096),

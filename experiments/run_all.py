@@ -14,6 +14,7 @@ edit it, and pass your copy to customize the experiment.
 import argparse
 import json
 import logging
+import multiprocessing
 from pathlib import Path
 
 import yaml
@@ -140,6 +141,49 @@ def cmd_prune(args, cfg: dict):
     logger.info("Pruning: %d/%d topologies passed", len(passing), len(results))
 
 
+def _blis_worker(
+    worker_index: int, total_workers: int,
+    configs: list[dict], workload: WorkloadInfo,
+    shard_path: Path,
+) -> int:
+    """Run a shard of BLIS configs in a worker process. Returns count of results written."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format=f"%(asctime)s %(levelname)s [worker-{worker_index}] %(name)s: %(message)s",
+        datefmt="%H:%M:%S",
+    )
+    from experiments.runners.run_blis import BLISRunner
+
+    shard = configs[worker_index::total_workers]
+    runner = BLISRunner(workload=workload, output_path=shard_path)
+
+    completed = runner.load_completed_hashes()
+    total = len(shard)
+    written = 0
+
+    for i, config in enumerate(shard):
+        config_hash = json.dumps(config, sort_keys=True).__hash__().__abs__().__str__()[:8]
+        if config_hash in completed:
+            continue
+
+        try:
+            result = runner.evaluate_config(config)
+            result.metadata.config_hash = config_hash
+            runner.append_result(result)
+            completed.add(config_hash)
+            written += 1
+        except Exception as e:
+            logging.getLogger(__name__).error("Config %s failed: %s", config_hash, e)
+
+        if (i + 1) % 10 == 0:
+            logging.getLogger(__name__).info(
+                "%d/%d evaluated (%d written)", i + 1, total, written,
+            )
+
+    logging.getLogger(__name__).info("Worker %d done: %d/%d written", worker_index, written, total)
+    return written
+
+
 def cmd_sweep(args, cfg: dict):
     """Run full config sweep for a tool."""
     model_cfg = cfg.get("model", {})
@@ -152,21 +196,83 @@ def cmd_sweep(args, cfg: dict):
     logger.info("Sweeping %s -> %s", args.tool, output)
 
     if args.tool == "blis":
-        from experiments.config.blis_configs import generate_blis_configs
+        from experiments.config.blis_configs import generate_pruned_blis_configs
         from experiments.runners.run_blis import BLISRunner
 
         max_gpus = model_cfg.get("max_gpus", 8)
-        configs = generate_blis_configs(max_gpus=max_gpus)
-        logger.info("Generated %d configs for inference-sim", len(configs))
+        blis_cfg = cfg.get("blis", {})
+        strategy = blis_cfg.get("strategy", "adaptive-hierarchical")
 
         runner = BLISRunner(
             workload=workload,
             output_path=output,
+            search_budget=blis_cfg.get("budget", 20),
+            phase1_k=blis_cfg.get("phase1_k", 1),
+            phase1_profiles=blis_cfg.get("phase1_profiles", "bracket"),
+            tp_candidates=blis_cfg.get("tp_candidates", "lean"),
+            skip_phase2=blis_cfg.get("skip_phase2", False),
+            fitness_weights=blis_cfg.get(
+                "fitness_weights", "throughput:0.4,p99_ttft:0.3,p99_e2e:0.3",
+            ),
         )
-        runner.run_batch(
-            configs,
-            hash_fn=lambda c: json.dumps(c, sort_keys=True).__hash__().__abs__().__str__()[:8],
-        )
+        if "fixed_rate" in blis_cfg:
+            runner._search_rate = blis_cfg["fixed_rate"]
+
+        if strategy == "adaptive-hierarchical":
+            logger.info(
+                "Running adaptive-hierarchical search (budget=%d, tp=%s)",
+                runner.search_budget, runner.tp_candidates,
+            )
+            results = runner.run_search(search_seed=workload.seed)
+            logger.info("Search complete: %d configs evaluated", len(results))
+        elif strategy == "tpe":
+            logger.info(
+                "Running TPE search (budget=%d)",
+                runner.search_budget,
+            )
+            results = runner.run_tpe_search(search_seed=workload.seed)
+            logger.info("TPE search complete: %d configs evaluated", len(results))
+        else:
+            configs = generate_pruned_blis_configs(max_gpus=max_gpus)
+            logger.info("Generated %d configs for brute-force sweep", len(configs))
+
+            workers = getattr(args, "workers", 1)
+            if workers > 1:
+                shard_dir = raw_dir / "blis_shards"
+                shard_dir.mkdir(parents=True, exist_ok=True)
+                shard_paths = [shard_dir / f"shard-{i:03d}.jsonl" for i in range(workers)]
+
+                logger.info(
+                    "Parallel sweep: %d workers, %d configs/worker (approx)",
+                    workers, len(configs) // workers,
+                )
+
+                processes = []
+                for i in range(workers):
+                    p = multiprocessing.Process(
+                        target=_blis_worker,
+                        args=(i, workers, configs, workload, shard_paths[i]),
+                    )
+                    p.start()
+                    processes.append(p)
+
+                for p in processes:
+                    p.join()
+
+                total_written = 0
+                with open(output, "w") as out:
+                    for sp in shard_paths:
+                        if sp.exists():
+                            text = sp.read_text()
+                            out.write(text)
+                            total_written += text.count("\n")
+
+                logger.info("Aggregated %d total results to %s", total_written, output)
+            else:
+                runner.run_batch(
+                    configs,
+                    hash_fn=lambda c: json.dumps(c, sort_keys=True).__hash__().__abs__().__str__()[:8],
+                )
 
     elif args.tool == "aiconfigurator":
         from experiments.runners.run_aiconfigurator import AIConfiguratorRunner
@@ -195,6 +301,45 @@ def cmd_sweep(args, cfg: dict):
         )
         n = runner.run_full_sweep()
         logger.info("llm-optimizer: %d total results written", n)
+
+    elif args.tool == "vidur":
+        from experiments.runners.run_vidur import VidurRunner
+
+        max_gpus = model_cfg.get("max_gpus", 8)
+        gpu_cost = model_cfg.get("gpu_cost_per_hour", 3.20)
+        vidur_cfg = cfg.get("vidur", {})
+        runner = VidurRunner(
+            workload=workload,
+            output_path=output,
+            gpu_cost_per_hour=gpu_cost,
+            max_gpus=max_gpus,
+            num_requests=vidur_cfg.get("num_requests", 500),
+            start_qps=vidur_cfg.get("start_qps", 10.0),
+            max_bisect_iters=vidur_cfg.get("max_bisect_iters", 8),
+            lean=vidur_cfg.get("lean", True),
+            slo_multiplier=vidur_cfg.get("slo_multiplier", 1.0),
+        )
+        n = runner.run_full_sweep()
+        logger.info("Vidur: %d total results written", n)
+
+    elif args.tool == "llmservingsim":
+        from experiments.runners.run_llmservingsim import LLMServingSimRunner
+
+        max_gpus = model_cfg.get("max_gpus", 8)
+        gpu_cost = model_cfg.get("gpu_cost_per_hour", 3.20)
+        lss_cfg = cfg.get("llmservingsim", {})
+        runner = LLMServingSimRunner(
+            workload=workload,
+            output_path=output,
+            gpu_cost_per_hour=gpu_cost,
+            max_gpus=max_gpus,
+            num_requests=lss_cfg.get("num_requests", 500),
+            start_rate=lss_cfg.get("start_rate", 10.0),
+            max_bisect_iters=lss_cfg.get("max_bisect_iters", 8),
+            lean=lss_cfg.get("lean", True),
+        )
+        n = runner.run_full_sweep()
+        logger.info("LLMServingSim: %d total results written", n)
 
     else:
         logger.warning("Runner for %s not yet implemented. See experiments/runners/", args.tool)
@@ -300,6 +445,8 @@ def main():
     # sweep
     sweep_parser = subparsers.add_parser("sweep", help="Full config sweep")
     sweep_parser.add_argument("--tool", required=True, choices=ALL_TOOLS)
+    sweep_parser.add_argument("--workers", type=int, default=1,
+                              help="Parallel workers (default: 1; try 6 on 8-core Mac)")
 
     # analyze
     subparsers.add_parser("analyze", help="Compute Pareto fronts and Chart 1")

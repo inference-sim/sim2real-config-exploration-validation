@@ -51,7 +51,7 @@ KNOWN_FIELDS = {
     "vllm_args": {
         "mapped": {
             "tensor_parallel_size", "pipeline_parallel_size",
-            "num_instances", "data_parallel_size",
+            "num_replicas", "data_parallel_size",
             "max_num_seqs", "max_num_batched_tokens",
             "enable_chunked_prefill", "block_size",
             "gpu_memory_utilization", "dtype", "kv_cache_dtype",
@@ -142,7 +142,7 @@ def build_scenario(entry: dict, name: str) -> dict:
     hw_label = HARDWARE_LABELS.get(hardware, hardware)
 
     tp = vllm_args.get("tensor_parallel_size", 1)
-    replicas = vllm_args.get("num_instances", 1)
+    replicas = vllm_args.get("num_replicas", 1)
     dp = vllm_args.get("data_parallel_size", 1)
 
     scenario = {"name": name}
@@ -217,7 +217,7 @@ def write_commented_yaml(scenario: dict, entry: dict, out_path: str):
 
     lines.append("")
     lines.append("  decode:")
-    lines.append(f"    replicas: {scenario['decode']['replicas']}  # from vllm_args.num_instances")
+    lines.append(f"    replicas: {scenario['decode']['replicas']}  # from vllm_args.num_replicas")
 
     if "acceleratorType" in scenario["decode"]:
         lines.append("    acceleratorType:")

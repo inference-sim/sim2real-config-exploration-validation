@@ -19,7 +19,7 @@ def _make_workload(**overrides):
 def _make_vllm_args(**overrides):
     defaults = dict(
         tensor_parallel_size=2, pipeline_parallel_size=1,
-        num_instances=4, data_parallel_size=1,
+        num_replicas=4, data_parallel_size=1,
         max_num_seqs=128, max_num_batched_tokens=4096,
         enable_chunked_prefill=True, block_size=16,
     )
@@ -65,7 +65,7 @@ def test_failed_config_has_null_results():
     result = ConfigResult(
         tool="llm-optimizer",
         workload=_make_workload(),
-        vllm_args=_make_vllm_args(tensor_parallel_size=8, num_instances=1),
+        vllm_args=_make_vllm_args(tensor_parallel_size=8, num_replicas=1),
         results=None,
         metadata=Metadata(status="oom", wall_clock_seconds=5.2),
     )
@@ -78,7 +78,7 @@ def test_single_replica_has_null_routing():
     result = ConfigResult(
         tool="vidur",
         workload=_make_workload(),
-        vllm_args=_make_vllm_args(tensor_parallel_size=4, num_instances=1),
+        vllm_args=_make_vllm_args(tensor_parallel_size=4, num_replicas=1),
         routing_config=None,
         tool_config=ToolConfig(vidur_scheduler_type="vllm"),
         results=Results(

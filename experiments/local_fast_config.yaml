@@ -1,0 +1,39 @@
+experiment:
+  name: config-exploration-llama3-8b-fast
+  description: Fast local sweep with 100 requests per probe
+
+model:
+  name: meta-llama/Llama-3.1-8B
+  hardware: H100_SXM_80GB
+  max_gpus: 8
+  gpu_cost_per_hour: 3.20
+
+workload:
+  preset: chatbot
+  num_requests: 100
+  rate: 10.0
+  isl_mean: 512
+  isl_max: 2048
+  osl_mean: 256
+  osl_max: 1024
+  arrival_pattern: poisson
+  seed: 42
+
+slo:
+  ttft_mean_ms: 300
+
+blis:
+  strategy: adaptive-hierarchical
+  budget: 4
+  phase1_k: 1
+  phase1_profiles: bracket
+  tp_candidates: lean
+  skip_phase2: false
+  fitness_weights: "throughput:0.4,p99_ttft:0.3,p99_e2e:0.3"
+
+analysis:
+  top_k: 3
+  min_throughput_tok_s: 200
+
+tools:
+  - blis

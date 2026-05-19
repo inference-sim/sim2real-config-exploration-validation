@@ -1,0 +1,34 @@
+scenario:
+- name: llm-optimizer-3
+
+  model:
+    name: meta-llama/Llama-3.1-8B  # from workload.model
+    shortName: meta-llama-llama-3-1-8b  # derived from model name (lookup table)
+    path: models/meta-llama/Llama-3.1-8B  # derived from model name (lookup table)
+    huggingfaceId: meta-llama/Llama-3.1-8B  # from workload.model
+    size: 1Ti  # lookup table (storage estimate)
+    maxModelLen: 131072  # lookup table (model's max context window)
+    blockSize: 16  # from vllm_args.block_size
+    gpuMemoryUtilization: 0.9  # from vllm_args.gpu_memory_utilization
+
+  vllmCommon:
+    flags:
+      enforceEager: false  # from vllm_args.enforce_eager
+
+  decode:
+    replicas: 1  # from vllm_args.num_replicas
+    acceleratorType:
+      labelKey: nvidia.com/gpu.product
+      labelValue: NVIDIA-H100-80GB-HBM3  # from workload.hardware (lookup table)
+    parallelism:
+      data: 1  # from vllm_args.data_parallel_size
+      dataLocal: 1  # from vllm_args.data_parallel_size
+      tensor: 3  # from vllm_args.tensor_parallel_size
+      workers: 3  # from vllm_args.tensor_parallel_size
+    vllm:
+      additionalFlags:
+      - "--max-num-seqs=64"  # from vllm_args.max_num_seqs
+      - "--max-num-batched-tokens=49152"  # from vllm_args.max_num_batched_tokens
+      - "--no-enable-prefix-caching"  # from vllm_args.enable_prefix_caching
+      - "--dtype=bfloat16"  # from vllm_args.dtype
+

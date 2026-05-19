@@ -1,0 +1,129 @@
+# LLMServingSim Profiler Job - Meta-Llama-3-8B
+#
+# Profiles Meta-Llama-3-8B on H100 at TP=1,2,4 for use in config exploration experiments.
+# Uses single-GPU TP emulation (the profiler shrinks the model config to match per-rank
+# kernel shapes, so only 1 GPU is needed regardless of TP degree).
+#
+# Prerequisites:
+#   - Secret "hf-secret" with key "HF_TOKEN" exists in namespace jchen
+#
+# Usage:
+#   kubectl apply -f llmservingsim-profiler-llama3-8b.yaml -n jchen
+#
+# To delete and retry:
+#   kubectl delete -f llmservingsim-profiler-llama3-8b.yaml -n jchen
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: llmservingsim-profiler-llama3-8b
+  namespace: jchen
+  labels:
+    app: llmservingsim-profiler
+    experiment: config-exploration
+    model: meta-llama-3-8b
+spec:
+  backoffLimit: 2
+  activeDeadlineSeconds: 14400  # 4h hard cap (8B is much faster than 70B)
+  template:
+    metadata:
+      labels:
+        app: llmservingsim-profiler
+        model: meta-llama-3-8b
+    spec:
+      restartPolicy: Never
+
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: nvidia.com/gpu.product
+                    operator: In
+                    values:
+                      - NVIDIA-H100-80GB-HBM3
+
+      containers:
+        - name: profiler
+          image: vllm/vllm-openai:v0.19.0
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -euo pipefail
+
+              echo "=== Installing dependencies ==="
+              pip install --no-cache-dir datasets matplotlib pyyaml >/dev/null 2>&1
+
+              echo "=== Cloning LLMServingSim ==="
+              cd /workspace
+              if [ ! -d "LLMServingSim" ]; then
+                apt-get update -qq && apt-get install -y -qq git >/dev/null 2>&1
+                git clone --recurse-submodules https://github.com/casys-kaist/LLMServingSim.git
+              fi
+              cd LLMServingSim
+
+              DEST=/data/llmservingsim-profiler/H100
+              mkdir -p "$DEST"
+
+              copy_partial() {
+                echo "=== Copying partial results to data PVC ==="
+                cp -r profiler/perf/H100/meta-llama "$DEST/" 2>/dev/null || true
+                ls -lR "$DEST/" 2>/dev/null || true
+              }
+              trap copy_partial EXIT
+
+              echo "=== Applying profiler patch (bypass torch.profiler hang) ==="
+              echo "IiIiTW9ua2V5LXBhdGNoIExMTVNlcnZpbmdTaW0ncyBwcm9maWxlciB0byBieXBhc3MgdG9yY2gucHJvZmlsZXIuCgp0b3JjaC5wcm9maWxlci5zdG9wX3RyYWNlKCkgaGFuZ3MgaW5kZWZpbml0ZWx5IHdoZW4gcHJvY2Vzc2luZyBDVURBIGV2ZW50cwpmcm9tIEZsYXNoQXR0ZW50aW9uIGtlcm5lbHMuIFRoaXMgcGF0Y2ggcmVwbGFjZXMgdmxsbSdzIGxheWVyd2lzZV9wcm9maWxlKCkKd2l0aCBkaXJlY3QgQ1VEQSBldmVudCB0aW1pbmcgdmlhIGZvcndhcmQgaG9va3MsIHByb2R1Y2luZyBpZGVudGljYWwgb3V0cHV0LgoKVXNhZ2U6IFJ1biB0aGlzIHNjcmlwdCBiZWZvcmUgaW52b2tpbmcgdGhlIHByb2ZpbGVyLgogIHB5dGhvbjMgL3dvcmtzcGFjZS9wYXRjaF9wcm9maWxlci5weQogIHB5dGhvbjMgLW0gcHJvZmlsZXIgcHJvZmlsZSAuLi4KCkl0IHBhdGNoZXMgdGhlIGluc3RhbGxlZCB2bGxtIHBhY2thZ2UgaW4tcGxhY2UuCiIiIgoKaW1wb3J0IHRleHR3cmFwCmltcG9ydCBpbXBvcnRsaWIKaW1wb3J0IHN5cwpmcm9tIHBhdGhsaWIgaW1wb3J0IFBhdGgKCgpkZWYgZmluZF92bGxtX3Byb2ZpbGVyKCk6CiAgICAiIiJMb2NhdGUgdmxsbSdzIGxheWVyd2lzZV9wcm9maWxlIG1vZHVsZSB3aXRob3V0IGltcG9ydGluZyBpdC4iIiIKICAgIGltcG9ydCB2bGxtCiAgICB2bGxtX2RpciA9IFBhdGgodmxsbS5fX2ZpbGVfXykucGFyZW50CiAgICB0YXJnZXQgPSB2bGxtX2RpciAvICJwcm9maWxlciIgLyAibGF5ZXJ3aXNlX3Byb2ZpbGUucHkiCiAgICBpZiBub3QgdGFyZ2V0LmV4aXN0cygpOgogICAgICAgIHJhaXNlIEZpbGVOb3RGb3VuZEVycm9yKGYiRXhwZWN0ZWQgdmxsbSBwcm9maWxlciBhdCB7dGFyZ2V0fSIpCiAgICByZXR1cm4gdGFyZ2V0CgoKZGVmIHdyaXRlX3JlcGxhY2VtZW50KHRhcmdldF9wYXRoOiBQYXRoKToKICAgICIiIk92ZXJ3cml0ZSB2bGxtJ3MgbGF5ZXJ3aXNlX3Byb2ZpbGUucHkgd2l0aCBDVURBLWV2ZW50LWJhc2VkIHRpbWluZy4iIiIKICAgIGNvZGUgPSB0ZXh0d3JhcC5kZWRlbnQoJycnXAogICAgICAgICIiIlBhdGNoZWQgbGF5ZXJ3aXNlX3Byb2ZpbGU6IHVzZXMgQ1VEQSBldmVudHMgaW5zdGVhZCBvZiB0b3JjaC5wcm9maWxlci4KCiAgICAgICAgRHJvcC1pbiByZXBsYWNlbWVudCB0aGF0IGF2b2lkcyB0aGUgc3RvcF90cmFjZSgpIGhhbmcgd2hpbGUgcHJvZHVjaW5nCiAgICAgICAgYSBjb21wYXRpYmxlIHJlc3VsdHMgb2JqZWN0IGZvciBleHRyYWN0X3NhbXBsZXMoKS4KICAgICAgICAiIiIKCiAgICAgICAgaW1wb3J0IHRvcmNoCiAgICAgICAgaW1wb3J0IHRvcmNoLm5uIGFzIG5uCiAgICAgICAgZnJvbSBjb250ZXh0bGliIGltcG9ydCBjb250ZXh0bWFuYWdlcgogICAgICAgIGZyb20gZGF0YWNsYXNzZXMgaW1wb3J0IGRhdGFjbGFzcywgZmllbGQKICAgICAgICBmcm9tIHR5cGluZyBpbXBvcnQgQW55CgoKICAgICAgICBAZGF0YWNsYXNzCiAgICAgICAgY2xhc3MgX0VudHJ5OgogICAgICAgICAgICBuYW1lOiBzdHIKICAgICAgICAgICAgY3VkYV90aW1lX3VzOiBmbG9hdCA9IDAuMAogICAgICAgICAgICBpbnZvY2F0aW9uczogaW50ID0gMAoKCiAgICAgICAgQGRhdGFjbGFzcwogICAgICAgIGNsYXNzIF9Ob2RlOgogICAgICAgICAgICBlbnRyeTogX0VudHJ5CiAgICAgICAgICAgIGNoaWxkcmVuOiBsaXN0ID0gZmllbGQoZGVmYXVsdF9mYWN0b3J5PWxpc3QpCgogICAgICAgICAgICBkZWYgdG9fZGljdChzZWxmKToKICAgICAgICAgICAgICAgIHJldHVybiB7CiAgICAgICAgICAgICAgICAgICAgImVudHJ5IjogewogICAgICAgICAgICAgICAgICAgICAgICAibmFtZSI6IHNlbGYuZW50cnkubmFtZSwKICAgICAgICAgICAgICAgICAgICAgICAgImN1ZGFfdGltZV91cyI6IHNlbGYuZW50cnkuY3VkYV90aW1lX3VzLAogICAgICAgICAgICAgICAgICAgICAgICAiaW52b2NhdGlvbnMiOiBzZWxmLmVudHJ5Lmludm9jYXRpb25zLAogICAgICAgICAgICAgICAgICAgIH0sCiAgICAgICAgICAgICAgICAgICAgImNoaWxkcmVuIjogW2MudG9fZGljdCgpIGZvciBjIGluIHNlbGYuY2hpbGRyZW5dLAogICAgICAgICAgICAgICAgfQoKCiAgICAgICAgY2xhc3MgX1Jlc3VsdHM6CiAgICAgICAgICAgIGRlZiBfX2luaXRfXyhzZWxmLCByb290X25vZGVzKToKICAgICAgICAgICAgICAgIHNlbGYuX3Jvb3Rfbm9kZXMgPSByb290X25vZGVzCgogICAgICAgICAgICBkZWYgY29udmVydF9zdGF0c190b19kaWN0KHNlbGYpOgogICAgICAgICAgICAgICAgcmV0dXJuIHsKICAgICAgICAgICAgICAgICAgICAic3VtbWFyeV9zdGF0cyI6IFtuLnRvX2RpY3QoKSBmb3IgbiBpbiBzZWxmLl9yb290X25vZGVzXSwKICAgICAgICAgICAgICAgIH0KCgogICAgICAgIGNsYXNzIF9Ib29rOgogICAgICAgICAgICAiIiJDb21wYXRpYmxlIGhvb2sgb2JqZWN0IHJldHVybmVkIGJ5IHRoZSBjb250ZXh0IG1hbmFnZXIuIiIiCgogICAgICAgICAgICBkZWYgX19pbml0X18oc2VsZik6CiAgICAgICAgICAgICAgICBzZWxmLnJlc3VsdHMgPSBOb25lCiAgICAgICAgICAgICAgICBzZWxmLl9tb2R1bGVfZXZlbnRzID0ge30gICMgaWQobW9kdWxlKSAtPiB7Y2xhc3NfbmFtZSwgc3RhcnRzLCBlbmRzfQogICAgICAgICAgICAgICAgc2VsZi5faGFuZGxlcyA9IFtdCgogICAgICAgICAgICBkZWYgX3JlZ2lzdGVyKHNlbGYsIG1vZGVsOiBubi5Nb2R1bGUpOgogICAgICAgICAgICAgICAgZm9yIG5hbWUsIG1vZCBpbiBtb2RlbC5uYW1lZF9tb2R1bGVzKCk6CiAgICAgICAgICAgICAgICAgICAgaWYgbm90IG5hbWU6CiAgICAgICAgICAgICAgICAgICAgICAgIGNvbnRpbnVlCiAgICAgICAgICAgICAgICAgICAgbWlkID0gaWQobW9kKQogICAgICAgICAgICAgICAgICAgIGNsYXNzX25hbWUgPSB0eXBlKG1vZCkuX19uYW1lX18KICAgICAgICAgICAgICAgICAgICBzZWxmLl9tb2R1bGVfZXZlbnRzW21pZF0gPSB7CiAgICAgICAgICAgICAgICAgICAgICAgICJjbGFzc19uYW1lIjogY2xhc3NfbmFtZSwKICAgICAgICAgICAgICAgICAgICAgICAgInBhdGgiOiBuYW1lLAogICAgICAgICAgICAgICAgICAgICAgICAic3RhcnRzIjogW10sCiAgICAgICAgICAgICAgICAgICAgICAgICJlbmRzIjogW10sCiAgICAgICAgICAgICAgICAgICAgfQoKICAgICAgICAgICAgICAgICAgICBkZWYgbWFrZV9wcmUobV9pZCk6CiAgICAgICAgICAgICAgICAgICAgICAgIGRlZiBwcmVfaG9vayhtb2R1bGUsIGFyZ3MpOgogICAgICAgICAgICAgICAgICAgICAgICAgICAgZXYgPSB0b3JjaC5jdWRhLkV2ZW50KGVuYWJsZV90aW1pbmc9VHJ1ZSkKICAgICAgICAgICAgICAgICAgICAgICAgICAgIGV2LnJlY29yZCgpCiAgICAgICAgICAgICAgICAgICAgICAgICAgICBzZWxmLl9tb2R1bGVfZXZlbnRzW21faWRdWyJzdGFydHMiXS5hcHBlbmQoZXYpCiAgICAgICAgICAgICAgICAgICAgICAgIHJldHVybiBwcmVfaG9vawoKICAgICAgICAgICAgICAgICAgICBkZWYgbWFrZV9wb3N0KG1faWQpOgogICAgICAgICAgICAgICAgICAgICAgICBkZWYgcG9zdF9ob29rKG1vZHVsZSwgYXJncywgb3V0cHV0KToKICAgICAgICAgICAgICAgICAgICAgICAgICAgIGV2ID0gdG9yY2guY3VkYS5FdmVudChlbmFibGVfdGltaW5nPVRydWUpCiAgICAgICAgICAgICAgICAgICAgICAgICAgICBldi5yZWNvcmQoKQogICAgICAgICAgICAgICAgICAgICAgICAgICAgc2VsZi5fbW9kdWxlX2V2ZW50c1ttX2lkXVsiZW5kcyJdLmFwcGVuZChldikKICAgICAgICAgICAgICAgICAgICAgICAgcmV0dXJuIHBvc3RfaG9vawoKICAgICAgICAgICAgICAgICAgICBoMSA9IG1vZC5yZWdpc3Rlcl9mb3J3YXJkX3ByZV9ob29rKG1ha2VfcHJlKG1pZCkpCiAgICAgICAgICAgICAgICAgICAgaDIgPSBtb2QucmVnaXN0ZXJfZm9yd2FyZF9ob29rKG1ha2VfcG9zdChtaWQpKQogICAgICAgICAgICAgICAgICAgIHNlbGYuX2hhbmRsZXMuYXBwZW5kKGgxKQogICAgICAgICAgICAgICAgICAgIHNlbGYuX2hhbmRsZXMuYXBwZW5kKGgyKQoKICAgICAgICAgICAgZGVmIF9maW5hbGl6ZShzZWxmKToKICAgICAgICAgICAgICAgIGZvciBoIGluIHNlbGYuX2hhbmRsZXM6CiAgICAgICAgICAgICAgICAgICAgaC5yZW1vdmUoKQogICAgICAgICAgICAgICAgc2VsZi5faGFuZGxlcy5jbGVhcigpCgogICAgICAgICAgICAgICAgdG9yY2guY3VkYS5zeW5jaHJvbml6ZSgpCgogICAgICAgICAgICAgICAgbm9kZXMgPSBbXQogICAgICAgICAgICAgICAgZm9yIG1pZCwgZGF0YSBpbiBzZWxmLl9tb2R1bGVfZXZlbnRzLml0ZW1zKCk6CiAgICAgICAgICAgICAgICAgICAgc3RhcnRzID0gZGF0YVsic3RhcnRzIl0KICAgICAgICAgICAgICAgICAgICBlbmRzID0gZGF0YVsiZW5kcyJdCiAgICAgICAgICAgICAgICAgICAgaWYgbm90IHN0YXJ0czoKICAgICAgICAgICAgICAgICAgICAgICAgY29udGludWUKICAgICAgICAgICAgICAgICAgICB0b3RhbF91cyA9IDAuMAogICAgICAgICAgICAgICAgICAgIGZvciBzLCBlIGluIHppcChzdGFydHMsIGVuZHMpOgogICAgICAgICAgICAgICAgICAgICAgICB0b3RhbF91cyArPSBzLmVsYXBzZWRfdGltZShlKSAqIDEwMDAuMCAgIyBtcyAtPiB1cwogICAgICAgICAgICAgICAgICAgIGludm9jYXRpb25zID0gbGVuKHN0YXJ0cykKICAgICAgICAgICAgICAgICAgICBlbnRyeSA9IF9FbnRyeSgKICAgICAgICAgICAgICAgICAgICAgICAgbmFtZT1mIntkYXRhWydjbGFzc19uYW1lJ119KC4uLikiLAogICAgICAgICAgICAgICAgICAgICAgICBjdWRhX3RpbWVfdXM9dG90YWxfdXMsCiAgICAgICAgICAgICAgICAgICAgICAgIGludm9jYXRpb25zPWludm9jYXRpb25zLAogICAgICAgICAgICAgICAgICAgICkKICAgICAgICAgICAgICAgICAgICBub2Rlcy5hcHBlbmQoX05vZGUoZW50cnk9ZW50cnkpKQoKICAgICAgICAgICAgICAgIHNlbGYucmVzdWx0cyA9IF9SZXN1bHRzKG5vZGVzKQoKCiAgICAgICAgIyBHbG9iYWwgcmVmZXJlbmNlIHRvIHRoZSBtb2RlbCBmb3IgaG9vayByZWdpc3RyYXRpb24uCiAgICAgICAgX2N1cnJlbnRfbW9kZWwgPSBOb25lCgoKICAgICAgICBkZWYgc2V0X21vZGVsKG1vZGVsOiBubi5Nb2R1bGUpOgogICAgICAgICAgICAiIiJDYWxsZWQgYnkgdGhlIHBhdGNoZWQgZXh0ZW5zaW9uIHRvIHBhc3MgdGhlIG1vZGVsIHJlZmVyZW5jZS4iIiIKICAgICAgICAgICAgZ2xvYmFsIF9jdXJyZW50X21vZGVsCiAgICAgICAgICAgIF9jdXJyZW50X21vZGVsID0gbW9kZWwKCgogICAgICAgIEBjb250ZXh0bWFuYWdlcgogICAgICAgIGRlZiBsYXllcndpc2VfcHJvZmlsZSgqLCBjb250ZXh0PU5vbmUsIG51bV93b3JrZXJzPU5vbmUpOgogICAgICAgICAgICAiIiJEcm9wLWluIHJlcGxhY2VtZW50IGZvciB2bGxtLnByb2ZpbGVyLmxheWVyd2lzZV9wcm9maWxlLmxheWVyd2lzZV9wcm9maWxlLiIiIgogICAgICAgICAgICBob29rID0gX0hvb2soKQogICAgICAgICAgICBpZiBfY3VycmVudF9tb2RlbCBpcyBub3QgTm9uZToKICAgICAgICAgICAgICAgIGhvb2suX3JlZ2lzdGVyKF9jdXJyZW50X21vZGVsKQogICAgICAgICAgICB0cnk6CiAgICAgICAgICAgICAgICB5aWVsZCBob29rCiAgICAgICAgICAgIGZpbmFsbHk6CiAgICAgICAgICAgICAgICBob29rLl9maW5hbGl6ZSgpCiAgICAnJycpCiAgICB0YXJnZXRfcGF0aC53cml0ZV90ZXh0KGNvZGUpCiAgICBwcmludChmIlBhdGNoZWQ6IHt0YXJnZXRfcGF0aH0iKQoKCmRlZiBwYXRjaF9leHRlbnNpb24oKToKICAgICIiIlBhdGNoIHRoZSBMTE1TZXJ2aW5nU2ltIGV4dGVuc2lvbiB0byBwYXNzIHRoZSBtb2RlbCB0byBvdXIgaG9vay4iIiIKICAgIGV4dF9wYXRoID0gUGF0aCgiL3dvcmtzcGFjZS9MTE1TZXJ2aW5nU2ltL3Byb2ZpbGVyL2NvcmUvaG9va3MvZXh0ZW5zaW9uLnB5IikKICAgIGlmIG5vdCBleHRfcGF0aC5leGlzdHMoKToKICAgICAgICBwcmludChmIldBUk5JTkc6IHtleHRfcGF0aH0gbm90IGZvdW5kLCBza2lwcGluZyBleHRlbnNpb24gcGF0Y2giKQogICAgICAgIHJldHVybgoKICAgIGNvbnRlbnQgPSBleHRfcGF0aC5yZWFkX3RleHQoKQoKICAgICMgQWRkIG1vZGVsIHJlZ2lzdHJhdGlvbiBiZWZvcmUgbGF5ZXJ3aXNlX3Byb2ZpbGUgaXMgdXNlZAogICAgaWYgInNldF9tb2RlbCIgbm90IGluIGNvbnRlbnQ6CiAgICAgICAgIyBGaW5kIHRoZSBmaXJlKCkgbWV0aG9kJ3MgbGF5ZXJ3aXNlX3Byb2ZpbGUgdXNhZ2UgYW5kIGluamVjdCBzZXRfbW9kZWwgY2FsbAogICAgICAgIG9sZCA9ICJmcm9tIHZsbG0ucHJvZmlsZXIubGF5ZXJ3aXNlX3Byb2ZpbGUgaW1wb3J0IGxheWVyd2lzZV9wcm9maWxlIgogICAgICAgIG5ldyA9ICgKICAgICAgICAgICAgImZyb20gdmxsbS5wcm9maWxlci5sYXllcndpc2VfcHJvZmlsZSBpbXBvcnQgbGF5ZXJ3aXNlX3Byb2ZpbGUsIHNldF9tb2RlbFxuIgogICAgICAgICkKICAgICAgICBpZiBvbGQgaW4gY29udGVudDoKICAgICAgICAgICAgY29udGVudCA9IGNvbnRlbnQucmVwbGFjZShvbGQsIG5ldykKICAgICAgICBlbHNlOgogICAgICAgICAgICAjIFRyeSBhbHRlcm5hdGUgaW1wb3J0IGxvY2F0aW9uCiAgICAgICAgICAgIG9sZCA9ICJmcm9tIHZsbG0ucHJvZmlsZXIubGF5ZXJ3aXNlX3Byb2ZpbGUgaW1wb3J0ICgiCiAgICAgICAgICAgIG5ldyA9ICJmcm9tIHZsbG0ucHJvZmlsZXIubGF5ZXJ3aXNlX3Byb2ZpbGUgaW1wb3J0IChcbiAgICAgICAgICAgIHNldF9tb2RlbCwiCiAgICAgICAgICAgIGlmIG9sZCBpbiBjb250ZW50OgogICAgICAgICAgICAgICAgY29udGVudCA9IGNvbnRlbnQucmVwbGFjZShvbGQsIG5ldykKCiAgICAgICAgIyBJbnNlcnQgc2V0X21vZGVsIGNhbGwgYmVmb3JlIHRoZSBsYXllcndpc2VfcHJvZmlsZSBjb250ZXh0CiAgICAgICAgb2xkX2Jsb2NrID0gIndpdGggbGF5ZXJ3aXNlX3Byb2ZpbGUoKSBhcyBob29rOiIKICAgICAgICBuZXdfYmxvY2sgPSAic2V0X21vZGVsKHNlbGYubW9kZWxfcnVubmVyLm1vZGVsKVxuICAgICAgICAgICAgd2l0aCBsYXllcndpc2VfcHJvZmlsZSgpIGFzIGhvb2s6IgogICAgICAgIGNvbnRlbnQgPSBjb250ZW50LnJlcGxhY2Uob2xkX2Jsb2NrLCBuZXdfYmxvY2spCgogICAgICAgIGV4dF9wYXRoLndyaXRlX3RleHQoY29udGVudCkKICAgICAgICBwcmludChmIlBhdGNoZWQ6IHtleHRfcGF0aH0iKQogICAgZWxzZToKICAgICAgICBwcmludChmIkFscmVhZHkgcGF0Y2hlZDoge2V4dF9wYXRofSIpCgoKZGVmIG1haW4oKToKICAgIHRhcmdldCA9IGZpbmRfdmxsbV9wcm9maWxlcigpCiAgICBwcmludChmIkZvdW5kIHZsbG0gcHJvZmlsZXIgYXQ6IHt0YXJnZXR9IikKICAgIHdyaXRlX3JlcGxhY2VtZW50KHRhcmdldCkKICAgIHBhdGNoX2V4dGVuc2lvbigpCiAgICBwcmludCgiRG9uZS4gUHJvZmlsZXIgaXMgcGF0Y2hlZCB0byB1c2UgQ1VEQSBldmVudCB0aW1pbmcuIikKCgppZiBfX25hbWVfXyA9PSAiX19tYWluX18iOgogICAgbWFpbigpCg==" | base64 -d > /workspace/patch_profiler.py
+              python3 /workspace/patch_profiler.py
+
+              echo "=== Starting profiler for meta-llama/Meta-Llama-3-8B ==="
+              for tp in 1 2 4; do
+                echo "=== Profiling TP=$tp ==="
+                python3 -m profiler profile meta-llama/Meta-Llama-3-8B \
+                  --hardware H100 \
+                  --tp "1,$tp" \
+                  --max-num-seqs 512 \
+                  --max-num-batched-tokens 2048 \
+                  --measurement-iterations 3 \
+                  --verbose
+                copy_partial
+              done
+
+              echo "=== Profiling complete ==="
+              ls -lR "$DEST/"
+
+          env:
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hf-secret
+                  key: HF_TOKEN
+            - name: HF_HOME
+              value: /workspace/.cache/huggingface
+            - name: HOME
+              value: /workspace
+
+          resources:
+            limits:
+              nvidia.com/gpu: "1"
+            requests:
+              nvidia.com/gpu: "1"
+
+          volumeMounts:
+            - name: workspace
+              mountPath: /workspace
+            - name: data
+              mountPath: /data
+            - name: dshm
+              mountPath: /dev/shm
+
+      volumes:
+        - name: workspace
+          emptyDir: {}
+        - name: data
+          persistentVolumeClaim:
+            claimName: data-pvc
+        - name: dshm
+          emptyDir:
+            medium: Memory

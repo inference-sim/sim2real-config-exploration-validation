@@ -30,6 +30,27 @@ workload:
 slo:
   ttft_mean_ms: 300
 
+blis:
+  strategy: tpe
+  budget: 50
+  fitness_weights: "throughput:0.4,p99_ttft:0.3,p99_e2e:0.3"
+  fixed_rate: 200
+
+vidur:
+  num_requests: 500
+  start_qps: 10
+  max_bisect_iters: 8
+  lean: true
+  # Vidur's bundled profiling data yields inflated absolute latencies (~100x).
+  # Multiplier scales SLO threshold so binary search finds meaningful results.
+  slo_multiplier: 100
+
+llmservingsim:
+  num_requests: 500
+  start_rate: 10
+  max_bisect_iters: 8
+  lean: true
+
 analysis:
   top_k: 3
   min_throughput_tok_s: 200

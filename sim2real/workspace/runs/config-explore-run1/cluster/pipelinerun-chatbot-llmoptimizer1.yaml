@@ -1,0 +1,59 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  name: llmoptimizer1-chatbot-config-explore-run1
+  namespace: jchen
+spec:
+  params:
+  - name: experimentId
+    value: config-explore-run1
+  - name: runName
+    value: config-explore-run1
+  - name: namespace
+    value: jchen
+  - name: phase
+    value: llmoptimizer1
+  - name: scenarioContent
+    value: "scenario:\n- decode:\n    acceleratorType:\n      labelKey: nvidia.com/gpu.product\n\
+      \      labelValue: NVIDIA-H100-80GB-HBM3\n    replicas: 1\n    vllm:\n     \
+      \ additionalFlags:\n      - --max-num-seqs=16\n      - --max-num-batched-tokens=12288\n\
+      \      - --no-enable-prefix-caching\n      - --dtype=bfloat16\n  huggingface:\n\
+      \    secretName: hf-secret\n  model:\n    blockSize: 16\n    gpuMemoryUtilization:\
+      \ 0.9\n    huggingfaceId: meta-llama/Llama-3.1-8B\n    maxModelLen: 131072\n\
+      \    name: meta-llama/Llama-3.1-8B\n    path: models/meta-llama/Llama-3.1-8B\n\
+      \    shortName: meta-llama-llama-3-1-8b\n    size: 1Ti\n  name: llm-optimizer-1\n\
+      \  vllmCommon:\n    flags:\n      enforceEager: false\n"
+  - name: specContent
+    value: "base_dir: /workspace/source/llm-d-benchmark\n\nvalues_file:\n  path: /workspace/source/llm-d-benchmark/config/templates/values/defaults.yaml\n\
+      \ntemplate_dir:\n  path: /workspace/source/llm-d-benchmark/config/templates/jinja\n\
+      \nscenario_file:\n  path: /tmp/llmdbench-config/scenario.yaml\n"
+  - name: workloadName
+    value: chatbot
+  - name: workloadSpec
+    value: "{aggregate_rate: 10, category: language, clients: [{arrival: {process:\
+      \ poisson}, id: chatbot,\n      input_distribution: {params: {max: 2048, mean:\
+      \ 512, min: 32, std_dev: 200},\n        type: gaussian}, output_distribution:\
+      \ {params: {max: 1024, mean: 256, min: 16,\n          std_dev: 100}, type: gaussian},\
+      \ rate_fraction: 1.0, slo_class: default,\n      streaming: true}], num_requests:\
+      \ 10000, seed: 42, version: '2'}"
+  - name: benchmarkGitRepoUrl
+    value: ''
+  - name: benchmarkGitCommit
+    value: unknown
+  - name: blisGitRepoUrl
+    value: https://github.com/inference-sim/inference-sim.git
+  - name: blisGitCommit
+    value: 6ffbfb1d0c840432e078eaf94bd2c6bb19b8b0f7
+  - name: model
+    value: meta-llama/Llama-3.1-8B
+  pipelineRef:
+    name: sim2real
+  timeouts:
+    pipeline: 4h
+  workspaces:
+  - name: data-storage
+    persistentVolumeClaim:
+      claimName: data-pvc
+  - name: source
+    persistentVolumeClaim:
+      claimName: source-pvc

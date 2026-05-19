@@ -24,7 +24,7 @@ class WorkloadInfo(BaseModel):
 class VllmArgs(BaseModel):
     tensor_parallel_size: int
     pipeline_parallel_size: int
-    num_instances: int
+    num_replicas: int
     data_parallel_size: int = 1
     max_num_seqs: int
     max_num_batched_tokens: int
@@ -73,6 +73,9 @@ class Metadata(BaseModel):
     timestamp: Optional[str] = Field(
         default_factory=lambda: datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
     )
+    fitness_score: Optional[float] = None
+    search_phase: Optional[int] = None
+    search_profile_idx: Optional[int] = None
 
 
 class ConfigResult(BaseModel):

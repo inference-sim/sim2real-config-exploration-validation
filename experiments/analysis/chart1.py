@@ -65,6 +65,29 @@ def compute_pareto_indices(costs: list[float], throughputs: list[float]) -> list
     return pareto
 
 
+def compute_upper_envelope(
+    ttft: list[float], throughput: list[float], n_bins: int = 20,
+) -> list[int]:
+    """Return indices on the Pareto frontier (not dominated by any other point).
+
+    A point is Pareto-optimal if no other point has both lower TTFT and higher
+    throughput. Returns indices sorted by ascending TTFT.
+    """
+    n = len(ttft)
+    if n == 0:
+        return []
+
+    order = sorted(range(n), key=lambda i: ttft[i])
+    pareto = []
+    max_tput = -1.0
+    for i in order:
+        if throughput[i] > max_tput:
+            pareto.append(i)
+            max_tput = throughput[i]
+
+    return sorted(pareto, key=lambda i: ttft[i])
+
+
 def load_validation_data(validation_file: Path) -> dict[str, dict]:
     """Load validation results keyed by config_hash."""
     if not validation_file.exists():
@@ -110,19 +133,30 @@ def plot_chart1(
     for tool_name, results in tool_results.items():
         style = TOOL_STYLES.get(tool_name, {"color": "gray", "marker": ".", "label": tool_name})
 
-        slo_meeting = [
+        plottable = [
             r for r in results
-            if r["results"].get("meets_slo", False)
+            if r.get("results") and r["results"].get("max_throughput_tok_s")
         ]
-        if not slo_meeting:
+        if not plottable:
             continue
 
-        ttft = [r["results"]["ttft_mean_ms"] for r in slo_meeting]
-        throughput = [r["results"]["max_throughput_tok_s"] for r in slo_meeting]
-        costs = [r["results"]["cost_per_hour"] for r in slo_meeting]
+        ttft = [r["results"]["ttft_mean_ms"] for r in plottable]
+        throughput = [r["results"]["max_throughput_tok_s"] for r in plottable]
+        costs = [r["results"]["cost_per_hour"] for r in plottable]
 
-        pareto_idx = compute_pareto_indices(ttft, throughput)
-        non_pareto_idx = [i for i in range(len(slo_meeting)) if i not in pareto_idx]
+        # Pareto frontier computed only among SLO-meeting points
+        slo_idx = [i for i in range(len(plottable))
+                   if plottable[i]["results"].get("meets_slo", False)]
+        if slo_idx:
+            slo_ttft = [ttft[i] for i in slo_idx]
+            slo_tput = [throughput[i] for i in slo_idx]
+            pareto_local = compute_upper_envelope(slo_ttft, slo_tput)
+            envelope_idx = [slo_idx[j] for j in pareto_local]
+        else:
+            envelope_idx = compute_upper_envelope(ttft, throughput)
+
+        envelope_set = set(envelope_idx)
+        non_envelope_idx = [i for i in range(len(plottable)) if i not in envelope_set]
 
         # Marker sizes proportional to cost (min 30, max 200)
         cost_arr = np.array(costs)
@@ -131,41 +165,41 @@ def plot_chart1(
         else:
             sizes = np.full_like(cost_arr, 80)
 
-        # Non-Pareto points (small, filled, faded)
-        if non_pareto_idx:
+        # Non-envelope points (small, filled, faded)
+        if non_envelope_idx:
             ax.scatter(
-                [ttft[i] for i in non_pareto_idx],
-                [throughput[i] for i in non_pareto_idx],
-                s=[sizes[i] * 0.4 for i in non_pareto_idx],
+                [ttft[i] for i in non_envelope_idx],
+                [throughput[i] for i in non_envelope_idx],
+                s=[sizes[i] * 0.4 for i in non_envelope_idx],
                 color=style["color"], marker=style["marker"],
                 alpha=0.15, zorder=2,
             )
 
-        # Pareto points (hollow, prominent)
-        if pareto_idx:
-            pareto_ttft = [ttft[i] for i in pareto_idx]
-            pareto_tput = [throughput[i] for i in pareto_idx]
-            pareto_sizes = [sizes[i] for i in pareto_idx]
+        # Pareto points (hollow, prominent) with frontier line
+        if envelope_idx:
+            env_ttft = [ttft[i] for i in envelope_idx]
+            env_tput = [throughput[i] for i in envelope_idx]
+            env_sizes = [sizes[i] for i in envelope_idx]
 
             ax.scatter(
-                pareto_ttft, pareto_tput,
-                s=pareto_sizes,
+                env_ttft, env_tput,
+                s=env_sizes,
                 facecolors="none", edgecolors=style["color"],
                 marker=style["marker"], linewidths=2,
                 label=style["label"], zorder=4,
             )
 
-            # Pareto frontier line (sorted by cost ascending = left to right in cost space)
-            sorted_pareto = sorted(zip(pareto_ttft, pareto_tput))
+            # Frontier line connecting Pareto points (left to right)
+            sorted_env = sorted(zip(env_ttft, env_tput))
             ax.plot(
-                [p[0] for p in sorted_pareto],
-                [p[1] for p in sorted_pareto],
-                color=style["color"], linewidth=1.5, alpha=0.6,
-                linestyle="--", zorder=3,
+                [p[0] for p in sorted_env],
+                [p[1] for p in sorted_env],
+                color=style["color"], linewidth=2, alpha=0.7,
+                linestyle="-", zorder=3,
             )
 
         # Drift arrows for validated configs
-        for r in slo_meeting:
+        for r in plottable:
             cfg_hash = r.get("metadata", {}).get("config_hash")
             if cfg_hash and cfg_hash in val_lookup:
                 val = val_lookup[cfg_hash]
@@ -198,11 +232,12 @@ def plot_chart1(
         linewidth=2, alpha=0.7, label=f"SLO: TTFT < {slo_ttft_ms:.0f}ms",
     )
 
-    ax.set_xlabel("Mean TTFT (ms)", fontsize=13)
+    ax.set_xscale("log")
+    ax.set_xlabel("Mean TTFT (ms, log scale)", fontsize=13)
     ax.set_ylabel("Max Throughput (tokens/sec)", fontsize=13)
     ax.set_title("Config Exploration: Predicted Performance by Tool", fontsize=14)
-    ax.legend(loc="best", fontsize=10, framealpha=0.9)
-    ax.grid(True, alpha=0.3)
+    ax.legend(loc="upper right", fontsize=10, framealpha=0.9)
+    ax.grid(True, alpha=0.3, which="both")
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     pdf_path = output_path.with_suffix(".pdf")

@@ -4,6 +4,7 @@ version: 3
 scenario: config-exploration-validation
 
 baselines:
+  # BLIS (inference-sim): TP=2, TP=4, TP=8
   - name: blis1
     scenario: baselines/blis-1.yaml
   - name: blis2
@@ -11,5 +12,21 @@ baselines:
   - name: blis3
     scenario: baselines/blis-3.yaml
 
+  # AIConfigurator: TP=1 x1, TP=1 x2, TP=1 x3
+  - name: aiconfigurator1
+    scenario: baselines/aiconfigurator-1.yaml
+  - name: aiconfigurator2
+    scenario: baselines/aiconfigurator-2.yaml
+  - name: aiconfigurator3
+    scenario: baselines/aiconfigurator-3.yaml
+
+  # llm-optimizer: TP=1, TP=2, TP=3
+  - name: llmoptimizer1
+    scenario: baselines/llm-optimizer-1.yaml
+  - name: llmoptimizer2
+    scenario: baselines/llm-optimizer-2.yaml
+  - name: llmoptimizer3
+    scenario: baselines/llm-optimizer-3.yaml
+
 workloads:
-  - workloads/w1_mid.yaml
+  - workloads/chatbot.yaml

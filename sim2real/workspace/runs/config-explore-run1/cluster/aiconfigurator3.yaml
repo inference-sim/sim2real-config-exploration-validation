@@ -1,0 +1,27 @@
+scenario:
+- decode:
+    acceleratorType:
+      labelKey: nvidia.com/gpu.product
+      labelValue: NVIDIA-H100-80GB-HBM3
+    replicas: 3
+    vllm:
+      additionalFlags:
+      - --max-num-seqs=256
+      - --max-num-batched-tokens=196608
+      - --no-enable-prefix-caching
+      - --dtype=bfloat16
+  huggingface:
+    secretName: hf-secret
+  model:
+    blockSize: 16
+    gpuMemoryUtilization: 0.9
+    huggingfaceId: meta-llama/Llama-3.1-8B
+    maxModelLen: 131072
+    name: meta-llama/Llama-3.1-8B
+    path: models/meta-llama/Llama-3.1-8B
+    shortName: meta-llama-llama-3-1-8b
+    size: 1Ti
+  name: aiconfigurator-3
+  vllmCommon:
+    flags:
+      enforceEager: false

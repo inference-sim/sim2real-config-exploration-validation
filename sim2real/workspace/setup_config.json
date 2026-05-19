@@ -1,21 +1,20 @@
 {
-  "namespace": "kalantar-0",
+  "namespace": "jchen",
   "namespaces": [
-    "kalantar-0",
-    "kalantar-1",
-    "kalantar-2"
+    "jchen"
   ],
   "registry": "ghcr.io/kalantar",
   "repo_name": "llm-d-inference-scheduler",
   "storage_class": "ibm-spectrum-scale-fileset",
-  "hf_secret_name": "hf-secret",
   "is_openshift": true,
-  "tektonc_dir": "/Users/kalantar/projects/go.workspace/src/github.com/inference-sim/sim2real/tektonc-data-collection",
-  "sim2real_root": "/Users/kalantar/projects/go.workspace/src/github.com/inference-sim/sim2real",
+  "tektonc_dir": "/Users/jchen/go/src/inference-sim/sim2real/tektonc-data-collection/tektonc-data-collection",
+  "sim2real_root": "/Users/jchen/go/src/inference-sim/sim2real",
   "pipeline_yaml": null,
+  "orchestrator_image": "ghcr.io/inference-sim/sim2real/orchestrator:latest",
   "container_runtime": "podman",
-  "current_run": "test",
-  "setup_timestamp": "2026-05-13T14:13:35Z",
+  "current_run": "config-explore-run1",
+  "setup_timestamp": "2026-05-19T17:17:05Z",
+  "hf_secret_name": "hf-secret",
   "workspaces": {
     "data-storage": {
       "persistentVolumeClaim": {

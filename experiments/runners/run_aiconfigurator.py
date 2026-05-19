@@ -1,9 +1,11 @@
 import logging
-import re
-import subprocess
 from pathlib import Path
 
-from experiments.config.topology import Topology, enumerate_topologies
+try:
+    from aiconfigurator.cli import cli_default
+except ImportError:
+    cli_default = None  # type: ignore[assignment]
+
 from experiments.runners.base import BaseRunner
 from experiments.schema.output import (
     ConfigResult, VllmArgs, RoutingConfig, ToolConfig,
@@ -12,85 +14,10 @@ from experiments.schema.output import (
 
 logger = logging.getLogger(__name__)
 
-MAX_NUM_SEQS = (32, 64, 128, 256, 512)
-
-
-def run_aiconfigurator_estimate(
-    model: str,
-    tp: int,
-    pp: int,
-    batch_size: int,
-    isl: int = 512,
-    osl: int = 256,
-    timeout: int = 30,
-) -> dict | None:
-    """Run aiconfigurator cli estimate in agg mode for a single config point.
-
-    Returns parsed metrics dict or None on failure.
-    """
-    cmd = [
-        "aiconfigurator", "cli", "estimate",
-        "--model-path", model,
-        "--system", "h100_sxm",
-        "--estimate-mode", "agg",
-        "--backend", "vllm",
-        "--isl", str(isl),
-        "--osl", str(osl),
-        "--tp-size", str(tp),
-        "--pp-size", str(pp),
-        "--batch-size", str(batch_size),
-        "--no-color",
-    ]
-
-    try:
-        result = subprocess.run(
-            cmd, capture_output=True, text=True, timeout=timeout,
-        )
-    except subprocess.TimeoutExpired:
-        logger.warning(
-            "aiconfigurator estimate timed out (TP=%d PP=%d BS=%d)", tp, pp, batch_size,
-        )
-        return None
-
-    if result.returncode != 0:
-        logger.debug(
-            "aiconfigurator failed (TP=%d PP=%d BS=%d): %s",
-            tp, pp, batch_size, result.stderr[:200],
-        )
-        return None
-
-    return parse_estimate_output(result.stdout, tp, pp, batch_size)
-
-
-def parse_estimate_output(output: str, tp: int, pp: int, batch_size: int) -> dict | None:
-    """Parse aiconfigurator estimate text output into structured metrics."""
-    metrics = {"tp": tp, "pp": pp, "batch_size": batch_size}
-
-    ttft_match = re.search(r"TTFT:\s*([\d.]+)\s*ms", output)
-    if ttft_match:
-        metrics["ttft_ms"] = float(ttft_match.group(1))
-
-    tpot_match = re.search(r"TPOT:\s*([\d.]+)\s*ms", output)
-    if tpot_match:
-        metrics["tpot_ms"] = float(tpot_match.group(1))
-
-    tput_match = re.search(r"tokens/s:\s*([\d,.]+)", output)
-    if tput_match:
-        metrics["tokens_per_sec"] = float(tput_match.group(1).replace(",", ""))
-
-    seq_match = re.search(r"seq/s:\s*([\d,.]+)", output)
-    if seq_match:
-        metrics["qps"] = float(seq_match.group(1).replace(",", ""))
-
-    if "tokens_per_sec" not in metrics:
-        return None
-
-    return metrics
-
 
 class AIConfiguratorRunner(BaseRunner):
     tool_name = "AIConfigurator"
-    timeout_seconds = 30
+    timeout_seconds = 120
 
     def __init__(
         self,
@@ -107,47 +34,63 @@ class AIConfiguratorRunner(BaseRunner):
         raise NotImplementedError("Use run_full_sweep() instead.")
 
     def run_full_sweep(self) -> int:
-        """Run aiconfigurator estimate for all topologies x batch sizes.
+        """Call cli default for each total_gpus in {1..max_gpus}.
 
-        Enumerates all valid (TP, PP, replicas) triples and sweeps
-        max_num_seqs values. Each call to aiconfigurator cli estimate
-        returns a single-point prediction in agg mode.
-
-        Per the spec, AIConfigurator assumes linear throughput scaling
-        with replicas (no routing model), so single-replica throughput
-        is multiplied by replica count.
+        Each call lets AIConfigurator enumerate all valid (TP, PP, replicas)
+        triples for that GPU budget, run its internal batch size sweep, apply
+        the TTFT SLO constraint, and return a Pareto frontier. Together, the
+        8 calls cover all 25 valid topology triples satisfying
+        TP * PP * replicas <= max_gpus.
         """
-        topologies = enumerate_topologies(self.max_gpus)
+        if cli_default is None:
+            logger.error("aiconfigurator not installed; skipping sweep")
+            return 0
+
         total_written = 0
 
-        for topo in topologies:
-            for batch_size in MAX_NUM_SEQS:
-                metrics = run_aiconfigurator_estimate(
-                    model=self.workload.model,
-                    tp=topo.tp,
-                    pp=topo.pp,
-                    batch_size=batch_size,
+        for total_gpus in range(1, self.max_gpus + 1):
+            logger.info("Running aiconfigurator cli default with total_gpus=%d", total_gpus)
+            try:
+                result = cli_default(
+                    model_path=self.workload.model,
+                    total_gpus=total_gpus,
+                    system="h100_sxm",
+                    backend="vllm",
                     isl=self.workload.isl_mean,
                     osl=self.workload.osl_mean,
-                    timeout=self.timeout_seconds,
+                    ttft=float(self.workload.slo_ttft_mean_ms),
                 )
+            except Exception as e:
+                logger.warning(
+                    "cli default failed for total_gpus=%d: %s", total_gpus, e,
+                )
+                continue
 
-                if not metrics:
-                    continue
+            df = result.best_configs.get("agg")
+            if df is None or df.empty:
+                logger.info("No agg results for total_gpus=%d", total_gpus)
+                continue
 
-                single_throughput = metrics["tokens_per_sec"]
-                single_qps = metrics.get("qps", 0)
-                ttft = metrics.get("ttft_ms", 0)
-                tpot = metrics.get("tpot_ms", 0)
+            for _, row in df.iterrows():
+                tp = int(row["tp"])
+                pp = int(row["pp"])
+                # replicas not in DataFrame; derive from GPU budget
+                replicas = total_gpus // int(row["num_total_gpus"])
+                batch_size = int(row["bs"])
+                ttft = float(row["ttft"])
+                tpot = float(row["tpot"]) if row["tpot"] else None
 
-                cluster_throughput = single_throughput * topo.replicas
-                cluster_qps = single_qps * topo.replicas
-                num_gpus = topo.tp * topo.pp * topo.replicas
+                # tokens/s and request_rate are per-replica; scale to cluster
+                cluster_throughput = float(row["tokens/s"]) * replicas
+                cluster_qps = float(row["request_rate"]) * replicas
+
+                num_gpus = tp * pp * replicas
+                cost = num_gpus * self.gpu_cost_per_hour
 
                 vllm_args = VllmArgs(
-                    tensor_parallel_size=topo.tp,
-                    pipeline_parallel_size=topo.pp,
-                    num_instances=topo.replicas,
+                    tensor_parallel_size=tp,
+                    pipeline_parallel_size=pp,
+                    num_replicas=replicas,
                     data_parallel_size=1,
                     max_num_seqs=batch_size,
                     max_num_batched_tokens=batch_size * (self.workload.isl_mean + self.workload.osl_mean),
@@ -155,14 +98,9 @@ class AIConfiguratorRunner(BaseRunner):
                     block_size=16,
                 )
 
-                routing = None
-                if topo.replicas > 1:
-                    routing = RoutingConfig(strategy="round-robin")
-
+                routing = RoutingConfig(strategy="round-robin") if replicas > 1 else None
                 tool_cfg = ToolConfig(scheduler="agg")
                 config_hash = compute_config_hash(vllm_args, routing, tool_cfg)
-                cost = num_gpus * self.gpu_cost_per_hour
-                meets_slo = ttft <= self.workload.slo_ttft_mean_ms
 
                 cr = ConfigResult(
                     tool=self.tool_name,
@@ -177,7 +115,7 @@ class AIConfiguratorRunner(BaseRunner):
                         ttft_p50_ms=None,
                         ttft_p99_ms=None,
                         tpot_mean_ms=tpot,
-                        meets_slo=meets_slo,
+                        meets_slo=ttft <= self.workload.slo_ttft_mean_ms,
                         cost_per_hour=cost,
                         cost_per_1k_tokens=(cost / cluster_throughput * 1000 / 3600)
                         if cluster_throughput > 0 else None,
@@ -191,7 +129,7 @@ class AIConfiguratorRunner(BaseRunner):
                 total_written += 1
 
         logger.info(
-            "AIConfigurator: %d results across %d topologies x %d batch sizes",
-            total_written, len(topologies), len(MAX_NUM_SEQS),
+            "AIConfigurator: %d results across total_gpus=1..%d",
+            total_written, self.max_gpus,
         )
         return total_written

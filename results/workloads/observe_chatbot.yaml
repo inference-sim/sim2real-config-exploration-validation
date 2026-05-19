@@ -1,0 +1,31 @@
+# Observe workload for real-deployment validation (blis observe).
+#
+# Matches the experiment's chatbot / servegen m-mid preset:
+#   ISL: mean=512, max=2048; OSL: mean=256, max=1024
+#   Arrival: Poisson at parameterized aggregate_rate
+#   10,000 requests for steady-state measurement (5 min at ~33 req/s)
+#
+# Usage:
+#   blis observe \
+#     --workload-spec results/workloads/observe_chatbot.yaml \
+#     --endpoint <llm-d-endpoint> \
+#     --max-concurrency 10000 \
+#     --warmup-requests 200 \
+#     --timeout 900
+#
+# Set aggregate_rate to the tool's predicted max_throughput_qps for validation.
+
+version: "2"
+seed: 42
+category: language
+aggregate_rate: 10
+num_requests: 10000
+
+clients:
+  - id: "chatbot"
+    slo_class: "default"
+    rate_fraction: 1.0
+    streaming: true
+    arrival: {process: poisson}
+    input_distribution: {type: gaussian, params: {mean: 512, std_dev: 200, min: 32, max: 2048}}
+    output_distribution: {type: gaussian, params: {mean: 256, std_dev: 100, min: 16, max: 1024}}

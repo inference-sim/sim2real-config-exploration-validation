@@ -204,7 +204,7 @@ class LLMOptimizerRunner(BaseRunner):
             vllm_args = VllmArgs(
                 tensor_parallel_size=tp,
                 pipeline_parallel_size=pp,
-                num_instances=1,
+                num_replicas=1,
                 data_parallel_size=dp,
                 max_num_seqs=concurrency,
                 max_num_batched_tokens=concurrency * (self.workload.isl_mean + self.workload.osl_mean),

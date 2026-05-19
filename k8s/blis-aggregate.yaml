@@ -1,0 +1,88 @@
+# BLIS Results Aggregation Job
+#
+# Concatenates per-shard JSONL files from the parallel sweep into a single
+# blis.jsonl file for analysis.
+#
+# Prerequisites:
+#   - blis-sweep Job has completed successfully (all 512 shards written)
+#
+# Usage:
+#   kubectl apply -f k8s/blis-aggregate.yaml -n jchen
+#
+# To delete and retry:
+#   kubectl delete -f k8s/blis-aggregate.yaml -n jchen
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: blis-aggregate
+  namespace: jchen
+  labels:
+    app: blis-aggregate
+    experiment: config-exploration
+    tool: blis
+spec:
+  backoffLimit: 1
+  template:
+    metadata:
+      labels:
+        app: blis-aggregate
+        experiment: config-exploration
+        tool: blis
+    spec:
+      restartPolicy: Never
+
+      containers:
+        - name: aggregate
+          image: python:3.11-slim
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -euo pipefail
+
+              SHARD_DIR="/data/config-exploration/results/raw/blis-sweep-v3"
+              OUTPUT="/data/config-exploration/results/raw/blis.jsonl"
+
+              echo "=== Aggregating shard files ==="
+              SHARD_COUNT=$(ls ${SHARD_DIR}/shard-*.jsonl 2>/dev/null | wc -l)
+              echo "Found ${SHARD_COUNT} shard files"
+
+              cat ${SHARD_DIR}/shard-*.jsonl > ${OUTPUT}
+
+              TOTAL_LINES=$(wc -l < ${OUTPUT})
+              echo "=== Aggregation complete: ${TOTAL_LINES} total results ==="
+
+              # Sanity check: count unique config hashes
+              python3 -c "
+              import json
+              seen = set()
+              ok = 0
+              with open('${OUTPUT}') as f:
+                  for line in f:
+                      d = json.loads(line)
+                      h = d.get('metadata', {}).get('config_hash')
+                      if h:
+                          seen.add(h)
+                      if d.get('results') and d['metadata'].get('status') == 'ok':
+                          ok += 1
+              print(f'Unique configs: {len(seen)}')
+              print(f'Successful (status=ok with results): {ok}')
+              "
+
+          resources:
+            requests:
+              cpu: "1"
+              memory: "2Gi"
+            limits:
+              cpu: "1"
+              memory: "4Gi"
+
+          volumeMounts:
+            - name: data
+              mountPath: /data
+
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: data-pvc

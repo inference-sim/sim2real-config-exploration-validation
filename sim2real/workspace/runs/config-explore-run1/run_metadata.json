@@ -1,0 +1,28 @@
+{
+  "version": 1,
+  "namespace": "jchen",
+  "registry": "ghcr.io/kalantar",
+  "repo_name": "llm-d-inference-scheduler",
+  "storage_class": "ibm-spectrum-scale-fileset",
+  "is_openshift": true,
+  "container_runtime": "podman",
+  "created_at": "2026-05-19T17:17:05Z",
+  "pipeline_commit": "6fe180c",
+  "component_image": "ghcr.io/kalantar/llm-d-inference-scheduler:config-explore-run1",
+  "stages": {
+    "setup": {
+      "status": "completed",
+      "completed_at": "2026-05-19T17:17:05Z",
+      "summary": "Namespace jchen configured, PVCs created, Tekton tasks deployed"
+    },
+    "prepare": {
+      "status": "pending"
+    },
+    "deploy": {
+      "status": "pending"
+    },
+    "results": {
+      "status": "pending"
+    }
+  }
+}

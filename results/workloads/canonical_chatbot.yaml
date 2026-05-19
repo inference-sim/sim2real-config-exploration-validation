@@ -24,4 +24,4 @@ clients:
             std_dev: 100
       streaming: false
 aggregate_rate: 10
-num_requests: 100
+num_requests: 10000
