@@ -4,25 +4,25 @@
   "phases": {
     "init": {
       "status": "done",
-      "timestamp": "2026-05-19T17:25:22.880408+00:00"
+      "timestamp": "2026-05-19T19:01:14.485733+00:00"
     },
     "context": {
       "status": "done",
-      "timestamp": "2026-05-19T17:25:22.965116+00:00",
-      "hash": "8a9679a270c5",
-      "cached": false,
-      "path": "/Users/jchen/go/src/inference-sim/sim2real-config-exploration-validation/sim2real/workspace/context/config-exploration-validation/8a9679a270c5.md",
+      "timestamp": "2026-05-19T19:01:14.550122+00:00",
+      "hash": "7126aba9aeb1",
+      "cached": true,
+      "path": "/Users/jchen/go/src/inference-sim/sim2real-config-exploration-validation/sim2real/workspace/context/config-exploration-validation/7126aba9aeb1.md",
       "context_file_prepared": true,
       "context_file_populated": false
     },
     "translate": {
       "status": "done",
-      "timestamp": "2026-05-19T17:25:22.965655+00:00",
+      "timestamp": "2026-05-19T19:01:14.550706+00:00",
       "mode": "baseline-only"
     },
     "assembly": {
       "status": "done",
-      "timestamp": "2026-05-19T17:25:23.109598+00:00",
+      "timestamp": "2026-05-29T01:03:47.346116+00:00",
       "packages": [
         "blis1",
         "blis2",
@@ -37,12 +37,7 @@
     },
     "summary": {
       "status": "done",
-      "timestamp": "2026-05-19T17:25:23.110539+00:00"
-    },
-    "gate": {
-      "status": "done",
-      "timestamp": "2026-05-19T17:25:27.194074+00:00",
-      "verdict": "READY TO DEPLOY"
+      "timestamp": "2026-05-29T01:03:47.348096+00:00"
     }
   }
 }

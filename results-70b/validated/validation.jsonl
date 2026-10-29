@@ -1,0 +1,8 @@
+{"config_hash": "89220430", "package": "aiconfigurator2", "tool": "aiconfigurator", "actual_ttft_mean_ms": 43588.95994520408, "actual_tpot_mean_ms": 41.377590362363534, "actual_token_rate_tok_s": 4.724849228521773, "num_requests": 9800, "num_errors": 0, "status": "ok"}
+{"config_hash": "16f33277", "package": "aiconfigurator3", "tool": "aiconfigurator", "actual_ttft_mean_ms": 140.78275089294826, "actual_tpot_mean_ms": 23.44796395243897, "actual_token_rate_tok_s": 41.67031876953438, "num_requests": 9799, "num_errors": 1, "status": "ok"}
+{"config_hash": "00aeb3d7", "package": "blis2", "tool": "blis", "actual_ttft_mean_ms": 156.46314836734695, "actual_tpot_mean_ms": 34.00668212563373, "actual_token_rate_tok_s": 28.886817903924765, "num_requests": 9800, "num_errors": 0, "status": "ok"}
+{"config_hash": "c2bd6baf", "package": "blis3", "tool": "blis", "actual_ttft_mean_ms": 196.7578031632653, "actual_tpot_mean_ms": 38.92006191874145, "actual_token_rate_tok_s": 25.19612215047719, "num_requests": 9800, "num_errors": 0, "status": "ok"}
+{"config_hash": "fa0cb0b0", "package": "llmoptimizer3", "tool": "llm-optimizer", "actual_ttft_mean_ms": 970411.6212452587, "actual_tpot_mean_ms": 20.52417843489227, "actual_token_rate_tok_s": 0.26238492435991095, "num_requests": 3111, "num_errors": 6689, "status": "ok"}
+{"config_hash": "1d065cac", "tool": "aiconfigurator", "status": "deploy_failed", "reason": "KV cache OOM: TP=2 insufficient for 70B with 131K context"}
+{"config_hash": "2d78fecf", "tool": "llm-optimizer", "status": "deploy_failed", "reason": "KV cache OOM: TP=2 insufficient for 70B with 131K context"}
+{"config_hash": "0da30292", "tool": "llm-optimizer", "status": "deploy_failed", "reason": "KV cache OOM: TP=3 insufficient for 70B with 131K context"}

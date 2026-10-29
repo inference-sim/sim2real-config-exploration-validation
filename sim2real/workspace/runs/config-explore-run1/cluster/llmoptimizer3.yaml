@@ -6,13 +6,13 @@ scenario:
     parallelism:
       data: 1
       dataLocal: 1
-      tensor: 3
-      workers: 3
+      tensor: 4
+      workers: 4
     replicas: 1
     vllm:
       additionalFlags:
-      - --max-num-seqs=64
-      - --max-num-batched-tokens=49152
+      - --max-num-seqs=8
+      - --max-num-batched-tokens=6144
       - --no-enable-prefix-caching
       - --dtype=bfloat16
   huggingface:
@@ -20,11 +20,11 @@ scenario:
   model:
     blockSize: 16
     gpuMemoryUtilization: 0.9
-    huggingfaceId: meta-llama/Llama-3.1-8B
+    huggingfaceId: meta-llama/Llama-3.1-70B
     maxModelLen: 131072
-    name: meta-llama/Llama-3.1-8B
-    path: models/meta-llama/Llama-3.1-8B
-    shortName: meta-llama-llama-3-1-8b
+    name: meta-llama/Llama-3.1-70B
+    path: models/meta-llama/Llama-3.1-70B
+    shortName: meta-llama-llama-3-1-70b
     size: 1Ti
   name: llm-optimizer-3
   vllmCommon:

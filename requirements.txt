@@ -1,1 +1,1 @@
-aiconfigurator==0.8.0
+aiconfigurator==0.9.0

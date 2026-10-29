@@ -15,7 +15,7 @@ num_requests: 10000
 
 clients:
   - id: "chatbot"
-    slo_class: "default"
+    slo_class: ""
     rate_fraction: 1.0
     streaming: true
     arrival: {process: poisson}

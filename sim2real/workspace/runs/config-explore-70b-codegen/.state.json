@@ -1,0 +1,34 @@
+{
+  "run_name": "config-explore-70b-codegen",
+  "scenario": "config-exploration-70b-codegen",
+  "phases": {
+    "init": {
+      "status": "done",
+      "timestamp": "2026-06-16T00:00:00+00:00"
+    },
+    "translate": {
+      "status": "done",
+      "timestamp": "2026-06-16T00:00:01+00:00",
+      "mode": "baseline-only"
+    },
+    "assembly": {
+      "status": "done",
+      "timestamp": "2026-06-16T17:04:15.318284+00:00",
+      "packages": [
+        "blis1",
+        "blis2",
+        "blis3",
+        "aiconfigurator1",
+        "aiconfigurator2",
+        "aiconfigurator3",
+        "llmoptimizer1",
+        "llmoptimizer2",
+        "llmoptimizer3"
+      ]
+    },
+    "summary": {
+      "status": "done",
+      "timestamp": "2026-06-16T17:04:15.319569+00:00"
+    }
+  }
+}

@@ -60,7 +60,7 @@ class AIConfiguratorRunner(BaseRunner):
                     osl=self.workload.osl_mean,
                     ttft=float(self.workload.slo_ttft_mean_ms),
                 )
-            except Exception as e:
+            except (Exception, SystemExit) as e:
                 logger.warning(
                     "cli default failed for total_gpus=%d: %s", total_gpus, e,
                 )
@@ -87,15 +87,15 @@ class AIConfiguratorRunner(BaseRunner):
                 num_gpus = tp * pp * replicas
                 cost = num_gpus * self.gpu_cost_per_hour
 
+                ctx_tokens = int(row["ctx_tokens"]) if row.get("ctx_tokens") else None
+
                 vllm_args = VllmArgs(
                     tensor_parallel_size=tp,
                     pipeline_parallel_size=pp,
                     num_replicas=replicas,
                     data_parallel_size=1,
                     max_num_seqs=batch_size,
-                    max_num_batched_tokens=batch_size * (self.workload.isl_mean + self.workload.osl_mean),
-                    enable_chunked_prefill=False,
-                    block_size=16,
+                    max_num_batched_tokens=ctx_tokens,
                 )
 
                 routing = RoutingConfig(strategy="round-robin") if replicas > 1 else None

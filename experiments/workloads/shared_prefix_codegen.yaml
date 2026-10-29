@@ -1,0 +1,27 @@
+# Shared-prefix code generation workload for Llama 2 70B validation.
+#
+# Shape: ISL ~566 (system_prompt 100 + question 466), OSL 247
+# 11 unique system prompts, 4 users per system prompt
+# Staged constant load: 10 req/s for 600s, then 10 req/s for 600s
+
+api:
+  streaming: true
+  type: completion
+
+data:
+  type: shared_prefix
+  shared_prefix:
+    enable_multi_turn_chat: true
+    num_unique_system_prompts: 11
+    num_users_per_system_prompt: 4
+    system_prompt_len: 100
+    question_len: 466
+    output_len: 247
+
+load:
+  type: constant
+  stages:
+    - duration: 600
+      rate: 10
+    - duration: 600
+      rate: 10

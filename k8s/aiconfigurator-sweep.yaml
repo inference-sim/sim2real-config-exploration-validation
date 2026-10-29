@@ -4,7 +4,7 @@
 # has native config search via "cli default" sweeps, but we only expect ~25 configs.
 #
 # Purpose:
-#   - Install aiconfigurator==0.8.0
+#   - Install aiconfigurator==0.9.0
 #   - Run sweep (no prune needed, small config space)
 #   - Results written to /data/config-exploration/results/raw/aiconfigurator.json
 #
@@ -51,7 +51,7 @@ spec:
 
               echo "=== Installing dependencies ==="
               apt-get update -qq && apt-get install -y -qq git >/dev/null 2>&1
-              pip install --no-cache-dir aiconfigurator==0.8.0 pydantic pyyaml >/dev/null 2>&1
+              pip install --no-cache-dir aiconfigurator==0.9.0 pydantic pyyaml >/dev/null 2>&1
 
               echo "=== Cloning experiment repo ==="
               cd /workspace

@@ -1,0 +1,26 @@
+{
+  "run_name": "config-explore-llama2-70b",
+  "scenario": "config-exploration-llama2-70b",
+  "phases": {
+    "init": {
+      "status": "done",
+      "timestamp": "2026-06-18T17:30:00+00:00"
+    },
+    "translate": {
+      "status": "done",
+      "timestamp": "2026-06-18T17:30:01+00:00",
+      "mode": "baseline-only"
+    },
+    "assembly": {
+      "status": "done",
+      "timestamp": "2026-06-18T17:30:02+00:00",
+      "packages": [
+        "blis1"
+      ]
+    },
+    "summary": {
+      "status": "done",
+      "timestamp": "2026-06-18T17:30:02+00:00"
+    }
+  }
+}

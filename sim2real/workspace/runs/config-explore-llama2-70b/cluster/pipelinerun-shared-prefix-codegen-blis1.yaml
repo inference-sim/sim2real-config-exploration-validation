@@ -1,0 +1,57 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  name: blis1-spc-ce-llama2-70b
+  namespace: jchen
+spec:
+  params:
+  - name: experimentId
+    value: config-explore-llama2-70b
+  - name: runName
+    value: config-explore-llama2-70b
+  - name: namespace
+    value: jchen
+  - name: phase
+    value: blis1
+  - name: scenarioContent
+    value: "scenario:\n  - name: blis-1\n\n    affinity:\n      enabled: true\n      nodeSelector:\n        kubernetes.io/hostname: pokprod-b93r44s2\n\n    images:\n      vllm:\n        tag: v0.22.1\n \
+      \     vllmOpenai:\n        tag: v0.22.1\n\n    model:\n      name: meta-llama/Llama-2-70b-hf\n      shortName: meta-llama-llama-2-70b-hf\n      path: models/meta-llama/Llama-2-70b-hf\n      huggingfaceId:\
+      \ meta-llama/Llama-2-70b-hf\n      size: 1Ti\n      maxModelLen: 4096\n      blockSize: 16\n      gpuMemoryUtilization: 0.9\n\n    decode:\n      replicas: 1\n      nodeSelector:\n        kubernetes.io/hostname:\
+      \ pokprod-b93r44s2\n      extraEnvVars:\n      - name: TORCHINDUCTOR_CACHE_DIR\n        value: /tmp\n      - name: USER\n        value: vllm\n      acceleratorType:\n        labelKey: nvidia.com/gpu.product\n\
+      \        labelValue: NVIDIA-H100-80GB-HBM3\n      parallelism:\n        data: 1\n        dataLocal: 1\n        tensor: 4\n        workers: 4\n      vllm:\n        loggingLevel: INFO\n        additionalFlags:\n\
+      \        - \"--max-num-seqs=64\"\n        - \"--max-num-batched-tokens=8192\"\n        - \"--enable-chunked-prefill\"\n        - \"--dtype=bfloat16\"\n        - \"--max-model-len=4096\"\n\n    huggingface:\n\
+      \      secretName: hf-secret\n\n    inferenceExtension:\n      pluginsConfigFile: \"blis-1-routing.yaml\"\n      pluginsCustomConfig:\n        blis-1-routing.yaml: |\n          apiVersion: llm-d.ai/v1alpha1\n\
+      \          kind: EndpointPickerConfig\n          plugins:\n          - type: decode-filter\n          - type: kv-cache-utilization-scorer\n          - type: load-aware-scorer\n          - type: max-score-picker\n\
+      \          - type: prefix-cache-scorer\n          - type: queue-scorer\n          - type: single-profile-handler\n          schedulingProfiles:\n          - name: default\n            plugins:\n \
+      \           - pluginRef: decode-filter\n            - pluginRef: max-score-picker\n            - pluginRef: kv-cache-utilization-scorer\n              weight: 5\n            - pluginRef: load-aware-scorer\n\
+      \              weight: 2\n            - pluginRef: prefix-cache-scorer\n              weight: 3\n            - pluginRef: queue-scorer\n              weight: 2\n"
+  - name: specContent
+    value: "base_dir: /workspace/source/llm-d-benchmark\n\nvalues_file:\n  path: /workspace/source/llm-d-benchmark/config/templates/values/defaults.yaml\n\ntemplate_dir:\n  path: /workspace/source/llm-d-benchmark/config/templates/jinja\n\
+      \nscenario_file:\n  path: /tmp/llmdbench-config/scenario.yaml\n"
+  - name: workloadName
+    value: shared_prefix_codegen
+  - name: workloadSpec
+    value: "{aggregate_rate: 10, category: language, clients: [{arrival: {process: constant}, id: codegen,\n      input_distribution: {params: {max: 1024, mean: 566, min: 64, std_dev: 150},\n        type:\
+      \ gaussian}, output_distribution: {params: {max: 512, mean: 247, min: 16,\n          std_dev: 80}, type: gaussian}, rate_fraction: 1.0, slo_class: '', streaming: true}],\n  num_requests: 10000, seed:\
+      \ 42, version: '2'}"
+  - name: benchmarkGitRepoUrl
+    value: https://github.com/jgchn/llm-d-benchmark.git
+  - name: benchmarkGitCommit
+    value: ab00f19ef84cd50680c06c9a8a5d08590b1d90de
+  - name: blisGitRepoUrl
+    value: https://github.com/inference-sim/inference-sim.git
+  - name: blisGitCommit
+    value: 254a70152ecc4809cc91aa3406c3ad34af4b9fd9
+  - name: model
+    value: meta-llama/Llama-2-70b-hf
+  pipelineRef:
+    name: sim2real
+  timeouts:
+    pipeline: 4h
+  workspaces:
+  - name: data-storage
+    persistentVolumeClaim:
+      claimName: data-pvc
+  - name: source
+    persistentVolumeClaim:
+      claimName: source-pvc

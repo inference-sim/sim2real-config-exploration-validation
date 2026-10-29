@@ -106,6 +106,17 @@ def load_validation_data(validation_file: Path) -> dict[str, dict]:
     return lookup
 
 
+MEAN_OUTPUT_TOKENS = 256
+
+
+def _compute_token_rate(ttft_ms: float, tpot_ms: float) -> float:
+    """Compute output token rate (tok/s) from TTFT and TPOT."""
+    if not tpot_ms or tpot_ms <= 0:
+        return 0.0
+    e2e_ms = ttft_ms + MEAN_OUTPUT_TOKENS * tpot_ms
+    return MEAN_OUTPUT_TOKENS / e2e_ms * 1000 if e2e_ms > 0 else 0.0
+
+
 def plot_chart1(
     results_dir: Path,
     output_path: Path,
@@ -135,13 +146,16 @@ def plot_chart1(
 
         plottable = [
             r for r in results
-            if r.get("results") and r["results"].get("max_throughput_tok_s")
+            if r.get("results") and r["results"].get("tpot_mean_ms")
         ]
         if not plottable:
             continue
 
         ttft = [r["results"]["ttft_mean_ms"] for r in plottable]
-        throughput = [r["results"]["max_throughput_tok_s"] for r in plottable]
+        throughput = [
+            _compute_token_rate(r["results"]["ttft_mean_ms"], r["results"]["tpot_mean_ms"])
+            for r in plottable
+        ]
         costs = [r["results"]["cost_per_hour"] for r in plottable]
 
         # Pareto frontier computed only among SLO-meeting points
@@ -198,15 +212,27 @@ def plot_chart1(
                 linestyle="-", zorder=3,
             )
 
-        # Drift arrows for validated configs
+        # Drift arrows and failure markers for validated configs
         for r in plottable:
             cfg_hash = r.get("metadata", {}).get("config_hash")
             if cfg_hash and cfg_hash in val_lookup:
                 val = val_lookup[cfg_hash]
                 pred_ttft = r["results"]["ttft_mean_ms"]
-                pred_tput = r["results"]["max_throughput_tok_s"]
+                pred_tput = _compute_token_rate(
+                    r["results"]["ttft_mean_ms"], r["results"]["tpot_mean_ms"],
+                )
+
+                if val.get("status") == "deploy_failed":
+                    # Mark failed deployments at predicted position
+                    ax.scatter(
+                        [pred_ttft], [pred_tput],
+                        s=200, color="red", marker="X",
+                        linewidths=2, zorder=7,
+                    )
+                    continue
+
                 actual_ttft = val["actual_ttft_mean_ms"]
-                actual_tput = val["actual_throughput_tok_s"]
+                actual_tput = val["actual_token_rate_tok_s"]
 
                 ax.annotate(
                     "", xy=(actual_ttft, actual_tput),
@@ -232,9 +258,17 @@ def plot_chart1(
         linewidth=2, alpha=0.7, label=f"SLO: TTFT < {slo_ttft_ms:.0f}ms",
     )
 
+    # Legend entry for failed deployments (only if any exist)
+    has_failures = any(
+        v.get("status") == "deploy_failed" for v in val_lookup.values()
+    )
+    if has_failures:
+        ax.scatter([], [], s=200, color="red", marker="X",
+                   linewidths=2, label="Deploy failed (OOM)")
+
     ax.set_xscale("log")
     ax.set_xlabel("Mean TTFT (ms, log scale)", fontsize=13)
-    ax.set_ylabel("Max Throughput (tokens/sec)", fontsize=13)
+    ax.set_ylabel("Output Token Rate (tokens/sec)", fontsize=13)
     ax.set_title("Config Exploration: Predicted Performance by Tool", fontsize=14)
     ax.legend(loc="upper right", fontsize=10, framealpha=0.9)
     ax.grid(True, alpha=0.3, which="both")

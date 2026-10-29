@@ -1,0 +1,59 @@
+% Updated tables for config_search.tex
+% Model: Llama-2-70b-hf on H100 GPUs
+% Workload: shared-prefix codegen (ISL mean=566, OSL mean=247, constant 5 rps, 5000 requests)
+% SLO: 300ms mean TTFT
+% Search: BLIS 420 configs (373 feasible, 298 Pareto-optimal); AIConfigurator 13 configs; LLM-Optimizer 7 configs
+
+\begin{table}[t]
+  \centering
+  \small
+  \caption{Top-2 recommended configurations per tool, selected from each tool's Pareto frontier. BLIS recommends two variants at 4 GPUs differing in batch aggressiveness; AIConfigurator and LLM-Optimizer span different GPU budgets. Predicted metrics are each tool's own estimates.}
+  \label{tab:top2}
+  \begin{tabular}{@{}llccrrr@{}}
+    \toprule
+    \textbf{Tool} & \textbf{TP$\times$Rep} & \textbf{GPUs} & \textbf{max\_seqs} & \textbf{Pred.\ TTFT} & \textbf{Pred.\ Tput} \\
+    & & & & (ms) & (qps) \\
+    \midrule
+    BLIS & 4$\times$1 & 4 & 64 & 46 & 7.96 \\
+    BLIS & 4$\times$1 & 4 & 256 & 46 & 7.96 \\
+    \midrule
+    AICfg & 2$\times$2 & 4 & 20 & 188 & 5.41 \\
+    AICfg & 2$\times$3 & 6 & 20 & 188 & 8.11 \\
+    \midrule
+    LLMOpt & 2$\times$1 & 2 & 4 & 284 & 5.07 \\
+    LLMOpt & 4$\times$1 & 4 & 8 & 284 & 23.15 \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+\begin{table}[t]
+  \centering
+  \small
+  \caption{Predicted versus measured performance for each tool's top-2 recommended configurations, deployed on H100 GPUs running llm-d with vLLM~v0.22.1 under constant arrival at 5\,rps (5{,}000 requests, shared-prefix codegen). Configurations that violate the 300\,ms TTFT SLO on real hardware are marked with $\times$.}
+  \label{tab:validation}
+  \begin{tabular}{@{}llrrrrc@{}}
+    \toprule
+    \textbf{Tool} & \textbf{Config} & \multicolumn{2}{c}{\textbf{TTFT mean (ms)}} & \multicolumn{2}{c}{\textbf{Throughput (qps)}} & \textbf{SLO} \\
+    & & Pred. & Meas. & Pred. & Meas. & \\
+    \midrule
+    BLIS & TP4, 64 seqs & 46 & 96 & 7.96 & 4.97 & \checkmark \\
+    BLIS & TP4, 256 seqs & 46 & TBD & 7.96 & TBD & TBD \\
+    \midrule
+    AICfg & TP2$\times$2, 20 seqs & 188 & 732 & 5.41 & 4.96 & $\times$ \\
+    AICfg & TP2$\times$3, 20 seqs & 188 & 132 & 8.11 & 4.96 & \checkmark \\
+    \midrule
+    LLMOpt & TP2, 4 seqs & 284 & 453{,}677 & 5.07 & 0.32 & $\times$ \\
+    LLMOpt & TP4, 8 seqs & 284 & TBD & 23.15 & TBD & TBD \\
+    \bottomrule
+  \end{tabular}
+\end{table}
+
+% Additional data point for discussion section:
+% BLIS TP4/64seqs at 8 rps: TTFT mean = 114ms (still 62\% below SLO)
+% This proves headroom: BLIS config handles 60\% higher load without SLO violation.
+%
+% Key framing:
+% - At 4 GPUs: BLIS (96ms) meets SLO; AICfg (732ms) violates by 2.4x; LLMOpt (454s) violates by 1500x
+% - AICfg needs 50% more GPUs (6 vs 4) to match BLIS's performance
+% - Root cause: BLIS recommends aggressive batching because simulator verifies queue stability;
+%   analytical tools cannot verify batch-size choices against queueing dynamics

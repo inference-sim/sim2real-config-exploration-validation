@@ -218,3 +218,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Generated plan files embed the HF token; never commit them
+results-*/validation/plans/**/plan/*/05_namespace_sa_rbac_secret.yaml
+results-*/validation/plans/**/plan/*/config.yaml

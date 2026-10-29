@@ -232,6 +232,59 @@ To perform configuration space search with BLIS, users need to:
 3. Implement search logic (grid search, random search, optimization algorithm) externally
 4. Use `--seed` flag for deterministic results during comparisons
 
+### External Search Implementation (search.py)
+
+The `estimators/inference-sim/search.py` script provides an external search wrapper with constraint support for use in experiments. This is **not part of the core BLIS binary**, but demonstrates how to build config search on top of BLIS.
+
+**Constraint Format:**
+
+Constraints use the format: `metric_name operator value`
+
+- **Metric name:** Lowercase alphanumeric + underscores, must start with a letter (e.g., `ttft_p99`, `gpu_count`)
+- **Operator:** `<=`, `>=`, `<`, `>`, `==`
+- **Value:** Numeric (integer or decimal), optionally signed
+- **Regex pattern:** `^([a-z][a-z0-9_]*)\s*(<=|>=|<|>|==)\s*([+-]?\d+(?:\.\d+)?)$`
+
+**Example spec YAML:**
+```yaml
+constraints:
+  - "ttft_p99 <= 300"
+  - "throughput >= 50"
+  - "gpu_count < 8"
+```
+
+**Constraint Processing:**
+
+Constraints are parsed (`search.py:205-214`) and classified into two categories (`search.py:216-232`):
+
+1. **Config-only constraints** (pre-simulation): Checked before BLIS runs (`search.py:250-261`, applied at lines 666-668, 710-712). Configs violating these are never simulated. Example: `gpu_count <= 8`
+
+2. **Metric constraints** (post-simulation): Checked after BLIS completes (`search.py:264-271`, applied at lines 611-612). Configs violating these get all objectives set to `float('inf')`, marking them infeasible and excluding them from Pareto front consideration (`search.py:773-774`).
+
+**Constraint evaluation operators** (`search.py:235-247`):
+```python
+if op == '<': return actual < value
+elif op == '<=': return actual <= value
+elif op == '>': return actual > value
+elif op == '>=': return actual >= value
+elif op == '==': return actual == value
+```
+
+**Output format:** The search output JSON includes explicit feasibility marking (`search.py:1619`):
+```json
+{
+  "all_configs": [
+    {
+      "config": {...},
+      "objectives": {...},
+      "feasible": false
+    }
+  ]
+}
+```
+
+Infeasible configs are excluded from the Pareto front and marked with `status="infeasible"` in experiment outputs.
+
 ## Documentation
 
 Full documentation at `estimators/inference-sim/docs/`:

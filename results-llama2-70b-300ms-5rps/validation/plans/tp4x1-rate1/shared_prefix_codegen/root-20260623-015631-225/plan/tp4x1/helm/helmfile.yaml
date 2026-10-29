@@ -1,0 +1,47 @@
+helmDefaults:
+  createNamespace: false
+---
+
+
+repositories:
+  - name: llm-d-modelservice
+    url: https://llm-d-incubation.github.io/llm-d-modelservice/
+  - name: llm-d-infra
+    url: https://llm-d-incubation.github.io/llm-d-infra/
+
+releases:
+  - name: infra-llmdbench
+    namespace: jchen
+    chart: llm-d-infra/llm-d-infra
+    version: v1.4.0
+    installed: true
+    labels:
+      type: infrastructure
+      kind: inference-stack
+    values:
+      - infra.yaml
+
+  - name: meta-lla-77b3c6b1-2-70b-hf-ms
+    namespace: jchen
+    chart: llm-d-modelservice/llm-d-modelservice
+    version: v0.4.15
+    installed: true
+    needs:
+      - jchen/infra-llmdbench
+      - jchen/meta-lla-77b3c6b1-2-70b-hf-router
+    values:
+      - ms-values.yaml
+    labels:
+      kind: inference-stack
+
+  - name: meta-lla-77b3c6b1-2-70b-hf-router
+    namespace: jchen
+    chart: oci://ghcr.io/llm-d/charts/llm-d-router-gateway-dev
+    version: v0
+    installed: true
+    needs:
+      - jchen/infra-llmdbench
+    values:
+      - router-values.yaml
+    labels:
+      kind: inference-stack

@@ -1,0 +1,45 @@
+apiVersion: tekton.dev/v1
+kind: PipelineRun
+metadata:
+  name: llmoptimizer1-spc-ce70b-cg
+  namespace: jchen
+spec:
+  params:
+  - name: experimentId
+    value: config-explore-70b-codegen
+  - name: runName
+    value: config-explore-70b-codegen
+  - name: namespace
+    value: jchen
+  - name: phase
+    value: llmoptimizer1
+  - name: scenarioContent
+    value: "scenario:\n- name: llm-optimizer-1\n\n  model:\n    name: meta-llama/Llama-3.1-70B  # from workload.model\n    shortName: meta-llama-llama-3-1-70b  # derived from model name (lookup table)\n    path: models/meta-llama/Llama-3.1-70B  # derived from model name (lookup table)\n    huggingfaceId: meta-llama/Llama-3.1-70B  # from workload.model\n    size: 1Ti  # lookup table (storage estimate)\n    blockSize: 16  # from vllm_args.block_size\n    gpuMemoryUtilization: 0.9  # from vllm_args.gpu_memory_utilization\n\n  vllmCommon:\n    flags:\n      enforceEager: false  # from vllm_args.enforce_eager\n\n  decode:\n    replicas: 1  # from vllm_args.num_replicas\n    acceleratorType:\n      labelKey: nvidia.com/gpu.product\n      labelValue: NVIDIA-H100-80GB-HBM3  # from workload.hardware (lookup table)\n    parallelism:\n      data: 1  # from vllm_args.data_parallel_size\n      dataLocal: 1  # from vllm_args.data_parallel_size\n      tensor: 2  # from vllm_args.tensor_parallel_size\n\
+      \      workers: 2  # from vllm_args.tensor_parallel_size\n    vllm:\n      additionalFlags:\n      - \"--max-num-seqs=4\"  # from vllm_args.max_num_seqs\n      - \"--no-enable-prefix-caching\"  # from vllm_args.enable_prefix_caching\n      - \"--dtype=bfloat16\"  # from vllm_args.dtype\n\n"
+  - name: specContent
+    value: "base_dir: /workspace/source/llm-d-benchmark\n\nvalues_file:\n  path: /workspace/source/llm-d-benchmark/config/templates/values/defaults.yaml\n\ntemplate_dir:\n  path: /workspace/source/llm-d-benchmark/config/templates/jinja\n\nscenario_file:\n  path: /tmp/llmdbench-config/scenario.yaml\n"
+  - name: workloadName
+    value: shared_prefix_codegen
+  - name: workloadSpec
+    value: "{aggregate_rate: 5, category: language, clients: [{arrival: {process: constant}, id: codegen,\n      input_distribution: {params: {max: 1024, mean: 566, min: 64, std_dev: 150},\n        type: gaussian}, output_distribution: {params: {max: 512, mean: 247, min: 16,\n          std_dev: 80}, type: gaussian}, rate_fraction: 1.0, slo_class: '', streaming: true}],\n  num_requests: 10000, seed: 42, version: '2'}"
+  - name: benchmarkGitRepoUrl
+    value: https://github.com/llm-d/llm-d-benchmark.git
+  - name: benchmarkGitCommit
+    value: 085c8a12ab79c21c33443bf8499467b53beeb764
+  - name: blisGitRepoUrl
+    value: https://github.com/inference-sim/inference-sim.git
+  - name: blisGitCommit
+    value: 254a70152ecc4809cc91aa3406c3ad34af4b9fd9
+  - name: model
+    value: meta-llama/Llama-3.1-70B
+  pipelineRef:
+    name: sim2real
+  timeouts:
+    pipeline: 4h
+  workspaces:
+  - name: data-storage
+    persistentVolumeClaim:
+      claimName: data-pvc
+  - name: source
+    persistentVolumeClaim:
+      claimName: source-pvc

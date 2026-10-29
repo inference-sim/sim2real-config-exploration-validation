@@ -1,0 +1,10 @@
+base_dir: /workspace/source/llm-d-benchmark
+
+values_file:
+  path: /workspace/source/llm-d-benchmark/config/templates/values/defaults.yaml
+
+template_dir:
+  path: /workspace/source/llm-d-benchmark/config/templates/jinja
+
+scenario_file:
+  path: /tmp/llmdbench-config/scenario.yaml

@@ -19,6 +19,7 @@ class WorkloadInfo(BaseModel):
     slo_ttft_mean_ms: int
     seed: int
     trace_file: Optional[str] = None
+    workload_file: Optional[str] = None
 
 
 class VllmArgs(BaseModel):
@@ -26,10 +27,10 @@ class VllmArgs(BaseModel):
     pipeline_parallel_size: int
     num_replicas: int
     data_parallel_size: int = 1
-    max_num_seqs: int
-    max_num_batched_tokens: int
-    enable_chunked_prefill: bool
-    block_size: int
+    max_num_seqs: Optional[int] = None
+    max_num_batched_tokens: Optional[int] = None
+    enable_chunked_prefill: Optional[bool] = None
+    block_size: Optional[int] = None
     gpu_memory_utilization: float = 0.9
     dtype: str = "bfloat16"
     kv_cache_dtype: str = "auto"
@@ -76,6 +77,8 @@ class Metadata(BaseModel):
     fitness_score: Optional[float] = None
     search_phase: Optional[int] = None
     search_profile_idx: Optional[int] = None
+    nsga2_objectives: Optional[dict[str, float]] = None
+    pareto_optimal: Optional[bool] = None
 
 
 class ConfigResult(BaseModel):

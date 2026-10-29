@@ -15,13 +15,14 @@ spec:
     value: aiconfigurator1
   - name: scenarioContent
     value: "scenario:\n- decode:\n    acceleratorType:\n      labelKey: nvidia.com/gpu.product\n\
-      \      labelValue: NVIDIA-H100-80GB-HBM3\n    replicas: 1\n    vllm:\n     \
-      \ additionalFlags:\n      - --max-num-seqs=256\n      - --max-num-batched-tokens=196608\n\
+      \      labelValue: NVIDIA-H100-80GB-HBM3\n    parallelism:\n      data: 1\n\
+      \      dataLocal: 1\n      tensor: 2\n      workers: 2\n    replicas: 1\n  \
+      \  vllm:\n      additionalFlags:\n      - --max-num-seqs=24\n      - --max-num-batched-tokens=18432\n\
       \      - --no-enable-prefix-caching\n      - --dtype=bfloat16\n  huggingface:\n\
       \    secretName: hf-secret\n  model:\n    blockSize: 16\n    gpuMemoryUtilization:\
-      \ 0.9\n    huggingfaceId: meta-llama/Llama-3.1-8B\n    maxModelLen: 131072\n\
-      \    name: meta-llama/Llama-3.1-8B\n    path: models/meta-llama/Llama-3.1-8B\n\
-      \    shortName: meta-llama-llama-3-1-8b\n    size: 1Ti\n  name: aiconfigurator-1\n\
+      \ 0.9\n    huggingfaceId: meta-llama/Llama-3.1-70B\n    maxModelLen: 131072\n\
+      \    name: meta-llama/Llama-3.1-70B\n    path: models/meta-llama/Llama-3.1-70B\n\
+      \    shortName: meta-llama-llama-3-1-70b\n    size: 1Ti\n  name: aiconfigurator-1\n\
       \  vllmCommon:\n    flags:\n      enforceEager: false\n"
   - name: specContent
     value: "base_dir: /workspace/source/llm-d-benchmark\n\nvalues_file:\n  path: /workspace/source/llm-d-benchmark/config/templates/values/defaults.yaml\n\
@@ -34,18 +35,18 @@ spec:
       \ poisson}, id: chatbot,\n      input_distribution: {params: {max: 2048, mean:\
       \ 512, min: 32, std_dev: 200},\n        type: gaussian}, output_distribution:\
       \ {params: {max: 1024, mean: 256, min: 16,\n          std_dev: 100}, type: gaussian},\
-      \ rate_fraction: 1.0, slo_class: default,\n      streaming: true}], num_requests:\
-      \ 10000, seed: 42, version: '2'}"
+      \ rate_fraction: 1.0, slo_class: '', streaming: true}],\n  num_requests: 10000,\
+      \ seed: 42, version: '2'}"
   - name: benchmarkGitRepoUrl
-    value: ''
+    value: https://github.com/llm-d/llm-d-benchmark.git
   - name: benchmarkGitCommit
-    value: unknown
+    value: 085c8a12ab79c21c33443bf8499467b53beeb764
   - name: blisGitRepoUrl
     value: https://github.com/inference-sim/inference-sim.git
   - name: blisGitCommit
-    value: 6ffbfb1d0c840432e078eaf94bd2c6bb19b8b0f7
+    value: 99e382dd2996454e1a24e84799b92ad3756b006c
   - name: model
-    value: meta-llama/Llama-3.1-8B
+    value: meta-llama/Llama-3.1-70B
   pipelineRef:
     name: sim2real
   timeouts:

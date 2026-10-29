@@ -1,0 +1,30 @@
+{
+  "namespace": "jchen",
+  "namespaces": [
+    "jchen"
+  ],
+  "registry": "ghcr.io/kalantar",
+  "repo_name": "llm-d-inference-scheduler",
+  "storage_class": "ibm-spectrum-scale-fileset",
+  "is_openshift": true,
+  "tektonc_dir": "/Users/jchen/go/src/inference-sim/sim2real/tektonc-data-collection",
+  "sim2real_root": "/Users/jchen/go/src/inference-sim/sim2real",
+  "pipeline_yaml": null,
+  "orchestrator_image": "ghcr.io/inference-sim/sim2real/orchestrator:latest",
+  "container_runtime": "podman",
+  "current_run": "config-explore-70b-codegen",
+  "setup_timestamp": "2026-06-16T16:43:33Z",
+  "hf_secret_name": "hf-secret",
+  "workspaces": {
+    "data-storage": {
+      "persistentVolumeClaim": {
+        "claimName": "data-pvc"
+      }
+    },
+    "source": {
+      "persistentVolumeClaim": {
+        "claimName": "source-pvc"
+      }
+    }
+  }
+}

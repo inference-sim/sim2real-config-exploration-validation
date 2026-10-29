@@ -275,3 +275,21 @@ results/
 | Vidur | `estimators/vidur` | `8383d29` | https://github.com/microsoft/vidur |
 | llm-optimizer | `estimators/llm-optimizer` | `bb82d22` | https://github.com/bentoml/llm-optimizer |
 | inference-sim | `estimators/inference-sim` | `2da40b9` | https://github.com/inference-sim/inference-sim |
+
+time ./estimators/inference-sim/blis run \
+  --model meta-llama/Llama-3.1-8B \
+  --hardware H100 \
+  --tp 1 \
+  --num-instances 1 \
+  --rate 5.0 \
+  --num-requests 10000 \
+  --seed 42 \
+  --latency-model trained-physics \
+  --max-num-running-reqs 32 \
+  --long-prefill-token-threshold 0 \
+  --block-size-in-tokens 16 \
+  --scheduler fcfs \
+  --preemption-policy fcfs \
+  --metrics-path /dev/stdout \
+  --defaults-filepath ./estimators/inference-sim/defaults.yaml \
+  --hardware-config ./estimators/inference-sim/hardware_config.json

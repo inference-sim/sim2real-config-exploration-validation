@@ -1,0 +1,51 @@
+scenario:
+- affinity:
+    enabled: true
+    nodeSelector:
+      kubernetes.io/hostname: pokprod-b93r44s2
+  decode:
+    acceleratorType:
+      labelKey: nvidia.com/gpu.product
+      labelValue: NVIDIA-H100-80GB-HBM3
+    extraEnvVars:
+    - name: TORCHINDUCTOR_CACHE_DIR
+      value: /tmp
+    - name: USER
+      value: vllm
+    nodeSelector:
+      kubernetes.io/hostname: pokprod-b93r44s2
+    parallelism:
+      data: 1
+      dataLocal: 1
+      tensor: 3
+      workers: 3
+    replicas: 1
+    vllm:
+      additionalFlags:
+      - --max-num-seqs=4
+      - --enable-chunked-prefill
+      - --dtype=bfloat16
+      - --max-model-len=4096
+      loggingLevel: INFO
+  huggingface:
+    secretName: hf-secret
+  images:
+    vllm:
+      tag: v0.22.1
+    vllmOpenai:
+      tag: v0.22.1
+  inferenceExtension:
+    pluginsConfigFile: llmopt2-routing.yaml
+    pluginsCustomConfig:
+      llmopt2-routing.yaml: "apiVersion: llm-d.ai/v1alpha1\nkind: EndpointPickerConfig\nplugins:\n- type: kv-cache-utilization-scorer\n- type: load-aware-scorer\n- type: queue-scorer\nschedulingProfiles:\n\
+        - name: default\n  plugins:\n  - pluginRef: kv-cache-utilization-scorer\n    weight: 5\n  - pluginRef: load-aware-scorer\n    weight: 2\n  - pluginRef: queue-scorer\n    weight: 2\n"
+  model:
+    blockSize: 16
+    gpuMemoryUtilization: 0.9
+    huggingfaceId: meta-llama/Llama-2-70b-hf
+    maxModelLen: 4096
+    name: meta-llama/Llama-2-70b-hf
+    path: models/meta-llama/Llama-2-70b-hf
+    shortName: meta-llama-llama-2-70b-hf
+    size: 1Ti
+  name: llmopt2

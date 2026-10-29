@@ -1,0 +1,48 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: download-model
+  namespace: jchen
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      namespace: jchen
+      labels:
+        app: llm-d-benchmark-harness
+    spec:
+      containers:
+        - name: downloader
+          image: ghcr.io/llm-d/llm-d-benchmark:v0.6.8.1
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              mkdir -p "${MOUNT_PATH}/${MODEL_PATH}" && \
+              pip install huggingface_hub && \
+              export PATH="${PATH}:${HOME}/.local/bin" && \
+              hf auth login --token "${HF_TOKEN}" && \
+              hf download "${HF_MODEL_ID}" --local-dir "/cache/${MODEL_PATH}"
+          env:
+            - name: MODEL_PATH
+              value: models/meta-llama/Llama-2-70b-hf
+            - name: HF_MODEL_ID
+              value: meta-llama/Llama-2-70b-hf
+            - name: HF_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: hf-secret
+                  key: HF_TOKEN
+            - name: HF_HOME
+              value: /tmp/huggingface
+            - name: HOME
+              value: /tmp
+            - name: MOUNT_PATH
+              value: /cache
+          volumeMounts:
+            - name: model-cache
+              mountPath: /cache
+      restartPolicy: OnFailure
+      volumes:
+        - name: model-cache
+          persistentVolumeClaim:
+            claimName: model-pvc

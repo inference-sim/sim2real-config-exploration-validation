@@ -1,0 +1,15 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: vllm-meta-lla-77b3c6b1-2-70b-hf
+  namespace: jchen
+  labels:
+spec:
+  selector:
+    matchLabels:
+      llm-d.ai/inferenceServing: "true"
+      llm-d.ai/model: meta-lla-77b3c6b1-2-70b-hf
+  podMetricsEndpoints:
+  - port: metrics
+    path: /metrics
+    interval: 30s

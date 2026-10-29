@@ -273,6 +273,94 @@ The config explorer produces:
 
 Supported devices: A100 80GB DGX, H100 DGX, 4xA100 80GB Pairwise NVLink, 8xA40 Pairwise NVLink
 
+## Profiling System
+
+Vidur uses a two-stage approach: profile once on real GPU hardware, then run simulations on CPUs using the captured performance models. Profiling tools are located in `vidur/profiling/`.
+
+### Profiling Tools
+
+**Compute Profilers:**
+- `vidur/profiling/mlp/main.py` (MLP layer profiling)
+- `vidur/profiling/attention/main.py` (Attention layer profiling)
+- Both support `--num_tensor_parallel_workers [1, 2, 4, 8]` by default
+
+**Network Profiler:**
+- `vidur/profiling/collectives/main.py` (All-reduce and send/recv profiling)
+
+**CPU Overhead Profiler:**
+- `vidur/profiling/cpu_overhead/main.py` (Scheduling, sampling overhead)
+
+### Hardware Requirements for Profiling
+
+**Compute profiling (MLP + Attention):**
+- Only 1 GPU required (even for TP > 1, just runs slower)
+- Can profile TP=8 with a single GPU
+- Uses reference transformer implementation
+
+**Network profiling (Collectives):**
+- Requires actual TP degree GPUs (8 GPUs needed for TP=8)
+- Must be on single node with proper connectivity (NVLink for best results)
+- Uses Ray cluster setup
+
+### Existing Profiling Data
+
+Pre-captured profiling data is located in `data/profiling/`:
+
+```
+data/profiling/
+├── compute/
+│   ├── a100/meta-llama/Llama-2-70b-hf/ (mlp.csv, attention.csv)
+│   ├── a40/meta-llama/Llama-2-70b-hf/
+│   └── h100/meta-llama/Llama-2-70b-hf/
+└── network/
+    ├── a100_dgx/ (all_reduce.csv, send_recv.csv)
+    ├── a100_pairwise_nvlink/
+    ├── a40_pairwise_nvlink/
+    ├── h100_dgx/
+    └── h100_pairwise_nvlink/
+```
+
+**TP degrees available for Llama-2-70b:**
+- Compute profiles: TP = 1, 2, 4, 8 (all devices)
+- Network profiles: num_workers = 2, 4, 8, 16 (DGX configs)
+
+TP=8 profiling data already exists for Llama-2-70b on A100, A40, and H100.
+
+### How to Profile New Models
+
+1. Clone sarathi-serve repo (vidur branch) and install
+2. Clone vidur repo, activate same venv
+3. Add model YAML config to `data/model_configs/` (if new model)
+4. Run MLP profiling:
+   ```bash
+   python vidur/profiling/mlp/main.py --models meta-llama/Llama-2-70b-hf --num_gpus 4
+   ```
+5. Run Attention profiling:
+   ```bash
+   python vidur/profiling/attention/main.py --models meta-llama/Llama-2-70b-hf --num_gpus 4
+   ```
+6. Copy output CSVs from `profiling_outputs/` to `data/profiling/compute/{device}/{model}/`
+
+For network profiling (new network configurations only):
+```bash
+python vidur/profiling/collectives/main.py \
+  --num_workers_per_node_combinations 1,2,4,8 \
+  --collective all_reduce
+```
+
+See `docs/profiling.md` for detailed instructions.
+
+### Execution Time Prediction
+
+The RandomForest execution time predictor (`vidur/execution_time_predictor/random_forrest_execution_time_predictor.py`) loads profiling data and trains ML models to predict batch execution times. Key features:
+
+- Filters profiling CSVs by model parameters and TP degree
+- Trains separate RandomForest models for each operation type (MLP, attention, network)
+- TP support is fully parameterized: any TP degree with profiling data is supported
+- Profiling data format:
+  - MLP/Attention CSVs: include `num_tensor_parallel_workers` column
+  - Network CSVs: include `num_workers` column for TP degree
+
 ## References
 
 - Paper: [Vidur: A Large-Scale Simulation Framework For LLM Inference](https://arxiv.org/abs/2405.05465) (MLSys'24)

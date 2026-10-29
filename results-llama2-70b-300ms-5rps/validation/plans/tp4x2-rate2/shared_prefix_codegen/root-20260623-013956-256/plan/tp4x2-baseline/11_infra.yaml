@@ -1,0 +1,14 @@
+gateway:
+  gatewayClassName: istio
+  gatewayParameters:
+    enabled: true
+    logLevel: error
+    resources:
+      limits:
+        cpu: "16"
+        memory: 16Gi
+      requests:
+        cpu: "4"
+        memory: 4Gi
+  service:
+    type: NodePort

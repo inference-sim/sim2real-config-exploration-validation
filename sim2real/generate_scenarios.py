@@ -17,13 +17,16 @@ MODEL_METADATA = {
         "shortName": "meta-llama-llama-3-1-8b",
         "path": "models/meta-llama/Llama-3.1-8B",
         "size": "1Ti",
-        "maxModelLen": 131072,
+    },
+    "meta-llama/Llama-3.1-70B": {
+        "shortName": "meta-llama-llama-3-1-70b",
+        "path": "models/meta-llama/Llama-3.1-70B",
+        "size": "1Ti",
     },
     "Qwen/Qwen3-14B": {
         "shortName": "qwen-qwen3-14b",
         "path": "models/Qwen/Qwen3-14B",
         "size": "1Ti",
-        "maxModelLen": 40960,
     },
 }
 
@@ -129,6 +132,88 @@ def build_additional_flags(vllm_args: dict) -> list[str]:
     return flags
 
 
+SCORER_TO_PLUGIN_TYPE = {
+    "kv-utilization": "kv-cache-utilization-scorer",
+    "kv-cache": "kv-cache-utilization-scorer",
+    "load-balance": "load-aware-scorer",
+    "active-request": "active-request-scorer",
+    "precise-prefix-cache": "prefix-cache-scorer",
+    "prefix-cache": "prefix-cache-scorer",
+    "queue-depth": "queue-scorer",
+    "queue": "queue-scorer",
+}
+
+SCORER_TO_PLUGINREF = {
+    "kv-utilization": "kv-cache-utilization-scorer",
+    "kv-cache": "kv-cache-utilization-scorer",
+    "load-balance": "load-aware-scorer",
+    "active-request": "active-request-scorer",
+    "precise-prefix-cache": "prefix-cache-scorer",
+    "prefix-cache": "prefix-cache-scorer",
+    "queue-depth": "queue-scorer",
+    "queue": "queue-scorer",
+}
+
+
+def build_routing_config(routing_config: dict, scenario_name: str) -> dict | None:
+    """Build inferenceExtension config from routing_config.
+
+    Returns a dict with pluginsConfigFile and pluginsCustomConfig,
+    or None if no routing is needed.
+    """
+    if not routing_config:
+        return None
+
+    strategy = routing_config.get("strategy")
+    scorers_str = routing_config.get("scorers")
+
+    if strategy == "round-robin" or not scorers_str:
+        return None
+
+    config_filename = f"{scenario_name}-routing.yaml"
+
+    scorer_entries = []
+    for entry in scorers_str.split(","):
+        parts = entry.strip().split(":")
+        if len(parts) == 2:
+            scorer_name, weight = parts[0], int(parts[1])
+        else:
+            scorer_name, weight = parts[0], 1
+        plugin_type = SCORER_TO_PLUGIN_TYPE.get(scorer_name, scorer_name + "-scorer")
+        plugin_ref = SCORER_TO_PLUGINREF.get(scorer_name, scorer_name + "-scorer")
+        scorer_entries.append((plugin_type, plugin_ref, weight))
+
+    plugin_types = set()
+    plugin_types.add("prefix-cache-scorer")
+    plugin_types.add("decode-filter")
+    plugin_types.add("max-score-picker")
+    plugin_types.add("single-profile-handler")
+    for plugin_type, _, _ in scorer_entries:
+        plugin_types.add(plugin_type)
+
+    lines = []
+    lines.append("apiVersion: inference.networking.x-k8s.io/v1alpha1")
+    lines.append("kind: EndpointPickerConfig")
+    lines.append("plugins:")
+    for pt in sorted(plugin_types):
+        lines.append(f"- type: {pt}")
+    lines.append("schedulingProfiles:")
+    lines.append("- name: default")
+    lines.append("  plugins:")
+    lines.append("  - pluginRef: decode-filter")
+    lines.append("  - pluginRef: max-score-picker")
+    for _, plugin_ref, weight in scorer_entries:
+        lines.append(f"  - pluginRef: {plugin_ref}")
+        lines.append(f"    weight: {weight}")
+
+    config_content = "\n".join(lines) + "\n"
+
+    return {
+        "pluginsConfigFile": f'"{config_filename}"',
+        "pluginsCustomConfig": {config_filename: config_content},
+    }
+
+
 def build_scenario(entry: dict, name: str) -> dict:
     """Build a scenario YAML dict from a single top3_selection entry."""
     workload = entry["workload"]
@@ -154,8 +239,7 @@ def build_scenario(entry: dict, name: str) -> dict:
         "path": meta.get("path", f"models/{model_name}"),
         "huggingfaceId": model_name,
         "size": meta.get("size", "1Ti"),
-        "maxModelLen": meta.get("maxModelLen", 16384),
-        "blockSize": vllm_args.get("block_size", 16),
+        "blockSize": vllm_args.get("block_size") or 16,
         "gpuMemoryUtilization": vllm_args.get("gpu_memory_utilization", 0.9),
     }
 
@@ -176,6 +260,11 @@ def build_scenario(entry: dict, name: str) -> dict:
             "workers": tp,
         }
 
+    decode["extraEnvVars"] = [
+        {"name": "TORCHINDUCTOR_CACHE_DIR", "value": "/tmp"},
+        {"name": "USER", "value": "vllm"},
+    ]
+
     flags = build_additional_flags(vllm_args)
     if flags:
         decode["vllm"] = {"additionalFlags": flags}
@@ -186,6 +275,11 @@ def build_scenario(entry: dict, name: str) -> dict:
         scenario["vllmCommon"] = {"flags": {"enforceEager": False}}
 
     scenario["decode"] = decode
+
+    # Routing (inferenceExtension)
+    routing = build_routing_config(routing_config, name)
+    if routing:
+        scenario["inferenceExtension"] = routing
 
     return scenario
 
@@ -205,7 +299,6 @@ def write_commented_yaml(scenario: dict, entry: dict, out_path: str):
     lines.append(f"    path: {scenario['model']['path']}  # derived from model name (lookup table)")
     lines.append(f"    huggingfaceId: {scenario['model']['huggingfaceId']}  # from workload.model")
     lines.append(f"    size: {scenario['model']['size']}  # lookup table (storage estimate)")
-    lines.append(f"    maxModelLen: {scenario['model']['maxModelLen']}  # lookup table (model's max context window)")
     lines.append(f"    blockSize: {scenario['model']['blockSize']}  # from vllm_args.block_size")
     lines.append(f"    gpuMemoryUtilization: {scenario['model']['gpuMemoryUtilization']}  # from vllm_args.gpu_memory_utilization")
 
@@ -224,6 +317,12 @@ def write_commented_yaml(scenario: dict, entry: dict, out_path: str):
         lines.append(f"      labelKey: {scenario['decode']['acceleratorType']['labelKey']}")
         lines.append(f"      labelValue: {scenario['decode']['acceleratorType']['labelValue']}  # from workload.hardware (lookup table)")
 
+    if "extraEnvVars" in scenario["decode"]:
+        lines.append("    extraEnvVars:")
+        for env in scenario["decode"]["extraEnvVars"]:
+            lines.append(f"    - name: {env['name']}")
+            lines.append(f"      value: {env['value']}")
+
     if "parallelism" in scenario["decode"]:
         p = scenario["decode"]["parallelism"]
         lines.append("    parallelism:")
@@ -238,6 +337,21 @@ def write_commented_yaml(scenario: dict, entry: dict, out_path: str):
         for flag in scenario["decode"]["vllm"]["additionalFlags"]:
             source = _flag_source(flag)
             lines.append(f"      - \"{flag}\"  # from vllm_args.{source}")
+
+    # Routing (inferenceExtension)
+    if "inferenceExtension" in scenario:
+        ie = scenario["inferenceExtension"]
+        lines.append("")
+        lines.append("  huggingface:")
+        lines.append("    secretName: hf-secret")
+        lines.append("")
+        lines.append("  inferenceExtension:")
+        lines.append(f"    pluginsConfigFile: {ie['pluginsConfigFile']}")
+        lines.append("    pluginsCustomConfig:")
+        for filename, content in ie["pluginsCustomConfig"].items():
+            lines.append(f"      {filename}: |")
+            for cline in content.rstrip("\n").split("\n"):
+                lines.append(f"        {cline}")
 
     lines.append("")
 

@@ -1,0 +1,234 @@
+# Experiment: Llama 2 70B shared-prefix code generation
+#
+# Workload: multi-turn chat with shared system prompts (11 prompts, 4 users each)
+# Shape: ISL 566 (system_prompt 100 + question 466), OSL 247, streaming
+# Load: constant 10 rps
+# Hardware: 8x H100 SXM 80GB
+# SLO: TTFT mean 500ms, TPOT mean 30ms
+# vLLM: 0.15.1
+#
+# Llama 2 70B:
+#   - Max context window is 4096
+#   - 70B params, TP>=2 required on H100 at bf16
+#   - No GQA, so KV cache is larger per token than Llama 3
+
+experiment:
+  name: config-exploration-llama2-70b-codegen
+  description: Llama 2 70B on 8x H100, shared-prefix codegen workload, vLLM 0.15.1, SLO 50ms TTFT / 30ms TPOT
+
+workload:
+  file: sim2real/workloads/shared_prefix_codegen.yaml
+  input_seq_len: {mean: 566, max: 1024}
+  output_seq_len: {mean: 247, max: 512}
+  arrival: staged_constant
+  num_requests: 10000
+  seed: 42
+  shared_prefix:
+    enable_multi_turn_chat: true
+    num_unique_system_prompts: 11
+    num_users_per_system_prompt: 4
+    system_prompt_len: 100
+    question_len: 466
+
+deployment:
+  vllm_version: "0.15.1"
+  vllm_image: "vllm/vllm-openai:v0.15.1"
+
+# ===============================================================================
+# Concept Map
+#
+# Single source of truth for all parameters. Each entry defines:
+#   value: canonical value (scalar = fixed, list = search dimension)
+#   <tool>.arg: the tool's native argument for this concept
+#   <tool>.value: override when the tool needs a different representation
+#   <tool>.note: explanation when mapping is non-trivial
+#
+# The runner reads this map to build each tool's search space. A tool only
+# explores a parameter if it has an arg mapping here.
+# ===============================================================================
+
+concept_map:
+  # --- Fixed Inputs ---
+  model:
+    value: meta-llama/Llama-2-70b-hf
+    blis: {arg: "--model"}
+    aiconfigurator: {arg: "model_path"}
+    llm-optimizer: {arg: "--model"}
+
+  hardware:
+    value: H100_SXM_80GB
+    blis: {arg: "--hardware", value: "H100"}
+    aiconfigurator: {arg: "system", value: "h100_sxm"}
+    llm-optimizer: {arg: "--gpu", value: "H100"}
+
+  input_seq_len:
+    value: 566
+    aiconfigurator: {arg: "isl"}
+    llm-optimizer: {arg: "--input-len"}
+
+  output_seq_len:
+    value: 247
+    aiconfigurator: {arg: "osl"}
+    llm-optimizer: {arg: "--output-len"}
+
+  seed:
+    value: 42
+    blis: {arg: "--seed"}
+
+  max_gpus:
+    value: 8
+    aiconfigurator: {arg: "total_gpus", note: "iterates 1..value"}
+    llm-optimizer: {arg: "--num-gpus", note: "iterates unique counts"}
+
+  gpu_memory_utilization:
+    value: 0.9
+    blis: {arg: "--gpu-memory-utilization"}
+
+  model_dtype:
+    value: bfloat16
+    llm-optimizer: {arg: "--dtype"}
+
+  kv_cache_dtype:
+    value: auto
+    llm-optimizer: {arg: "--kv-cache-dtype"}
+
+  max_model_len:
+    value: 4096
+    note: "Llama 2 native context window"
+    blis: {arg: "--max-model-len"}
+    llm-optimizer: {arg: "--max-model-len"}
+
+  framework:
+    value: vllm
+    aiconfigurator: {arg: "backend"}
+    llm-optimizer: {arg: "--framework"}
+
+  latency_model:
+    value: trained-physics
+    blis: {arg: "--latency-model"}
+
+  # --- SLO Constraints ---
+  slo_ttft_ms:
+    value: 300
+    aiconfigurator: {arg: "ttft"}
+    llm-optimizer: {arg: "--constraints", value: "ttft:mean<300ms"}
+
+
+  # --- Topology (search dimensions) ---
+  tp:
+    value: [2, 4, 8]
+    blis: {arg: "--tp"}
+    aiconfigurator: {note: "enumerated internally"}
+    llm-optimizer: {note: "determined internally"}
+
+  pp:
+    value: [1, 2, 4, 8]
+    aiconfigurator: {note: "enumerated internally"}
+    llm-optimizer: {note: "determined internally"}
+
+  deployment_replicas:
+    value: [1, 2, 4, 8]
+    note: "derived: 1..floor(max_gpus / (tp * pp))"
+    blis: {arg: "--num-instances"}
+    aiconfigurator: {note: "derived internally from total_gpus / tp"}
+
+  data_parallel_size:
+    value: [1, 2, 4, 8]
+    llm-optimizer: {arg: "--data-parallel-size"}
+
+  # --- Batching (search dimensions) ---
+  max_num_seqs:
+    value: [32, 64, 128, 256, 512]
+    blis: {arg: "--max-num-running-reqs"}
+    aiconfigurator: {note: "swept internally as batch_size"}
+    llm-optimizer: {arg: "--max-num-seqs"}
+
+  max_batched_tokens:
+    value: [2048, 4096, 8192]
+    blis: {arg: "--max-num-scheduled-tokens"}
+    llm-optimizer: {arg: "--max-num-batched-tokens"}
+
+  chunked_prefill_threshold:
+    value: [0, 1024, 2048, 4096]
+    note: "0=disabled, >0=chunk size. Subsumes enable_chunked_prefill."
+    blis: {arg: "--long-prefill-token-threshold"}
+    llm-optimizer: {arg: "--enable-chunked-prefill", value: "true when > 0"}
+
+  block_size:
+    value: [16, 32]
+    blis: {arg: "--block-size-in-tokens"}
+    llm-optimizer: {arg: "--block-size"}
+
+  prefix_caching:
+    value: [true, false]
+    blis: {note: "controlled via precise-prefix-cache scorer weight"}
+    llm-optimizer: {arg: "--enable-prefix-caching"}
+
+  kv_blocks:
+    value: [2000, 3000, 4000, 5000, 7500, 10000]
+    blis: {arg: "--total-kv-blocks"}
+
+  max_concurrency:
+    value: [32, 64, 128, 256]
+    llm-optimizer: {arg: "--max-concurrency"}
+
+  # --- Scheduling & Routing (search dimensions) ---
+  scheduler:
+    value: [fcfs, sjf]
+    blis: {arg: "--scheduler"}
+
+  routing_policy:
+    value: [round-robin, least-loaded, weighted]
+    blis: {arg: "--routing-policy", note: "applies when deployment_replicas > 1"}
+
+  routing_scorer_space:
+    value:
+      queue_depth: [1, 2, 3, 4, 5]
+      kv_utilization: [1, 2, 3, 4, 5]
+      precise_prefix_cache: [1, 2, 3, 4, 5]
+      load_balance: [1, 2, 3, 4, 5]
+      min_scorers: 1
+    blis: {arg: "--routing-scorers", note: "auto-generated combos when routing_policy=weighted"}
+
+  admission_policy:
+    value: [always-admit, tier-shed]
+    blis: {arg: "--admission-policy", note: "applies when deployment_replicas > 1"}
+
+  preemption_policy:
+    value: [fcfs, priority]
+    blis: {arg: "--preemption-policy"}
+
+# ===============================================================================
+# Tool Configuration
+#
+# Search strategy and hyperparameters only. The search space is derived
+# from the concept_map above (each tool explores params where it has an arg).
+# ===============================================================================
+
+tools:
+  blis:
+    search:
+      strategy: nsga2
+      fixed_rate: 5
+      search_script: /Users/jchen/go/src/inference-sim/inference-sim/search.py
+      defaults_filepath: /Users/jchen/go/src/inference-sim/inference-sim/defaults.yaml
+      model_config_folder: /Users/jchen/.cache/huggingface/hub/models--meta-llama--Llama-2-70b-hf/snapshots/3aba440b59558f995867ba6e1f58f21d0336b5bb
+      nsga2:
+        pop_size: 60
+        n_gens: 6
+        workers: 8
+        objectives: [throughput, ttft_mean, gpu_count]
+        constraints: ["ttft_mean <= 300", "gpu_count <= 8"]
+
+  aiconfigurator:
+    search:
+      strategy: native
+
+  llm-optimizer:
+    search:
+      strategy: native
+
+analysis:
+  top_k: 3
+  min_throughput_tok_s: 200
+  gpu_cost_per_hour: 3.20

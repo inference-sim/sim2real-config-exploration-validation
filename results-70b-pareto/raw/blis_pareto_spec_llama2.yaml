@@ -1,0 +1,24 @@
+fixed:
+  model: meta-llama/Llama-2-70b-hf
+  hardware: H100
+  num_requests: 200
+  seed: 42
+  latency_model: trained-physics
+  gpu_memory_utilization: 0.9
+  hardware_config: /Users/jchen/go/src/inference-sim/sim2real-config-exploration-validation/estimators/inference-sim/hardware_config.json
+  defaults_filepath: /Users/jchen/go/src/inference-sim/sim2real-config-exploration-validation/estimators/inference-sim/defaults.yaml
+  model_config_folder: /Users/jchen/go/src/inference-sim/sim2real-config-exploration-validation/estimators/inference-sim/model_configs/llama-2-70b-hf
+search_space:
+  tp: [2, 4, 8]
+  num_instances: [1, 2, 3, 4]
+  rate: [25, 50, 100, 150, 200, 300, 400, 500]
+  scheduler: [fcfs, sjf]
+  max_num_running_reqs: [32, 64, 128, 256, 512]
+  total_kv_blocks: [2000, 3000, 5000, 7500, 10000]
+  block_size_in_tokens: [16, 32]
+objectives: [throughput, ttft_p99, gpu_count]
+algorithm:
+  pop_size: 100
+  n_gens: 10
+  seed: 42
+  workers: 8

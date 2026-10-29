@@ -1,0 +1,52 @@
+provider:
+  name: istio
+router:
+  epp:
+    env:
+    - name: HF_TOKEN
+      valueFrom:
+        secretKeyRef:
+          key: HF_TOKEN
+          name: hf-secret
+    extProcPort: 9002
+    extraContainerPorts:
+    - containerPort: 5557
+      name: zmq
+      protocol: TCP
+    flags:
+      v: '1'
+    image:
+      name: llm-d-router-endpoint-picker-dev
+      pullPolicy: Always
+      registry: ghcr.io
+      repository: llm-d/llm-d-router-endpoint-picker-dev
+      tag: main
+    pluginsConfigFile: aicfg1-routing.yaml
+    pluginsCustomConfig:
+      aicfg1-routing.yaml: "apiVersion: llm-d.ai/v1alpha1\nkind: EndpointPickerConfig\n\
+        plugins:\n- type: kv-cache-utilization-scorer\n- type: load-aware-scorer\n\
+        - type: queue-scorer\nschedulingProfiles:\n- name: default\n  plugins:\n \
+        \ - pluginRef: kv-cache-utilization-scorer\n    weight: 5\n  - pluginRef:\
+        \ load-aware-scorer\n    weight: 2\n  - pluginRef: queue-scorer\n    weight:\
+        \ 2\n"
+    replicas: 1
+  extraServicePorts:
+  - name: zmq
+    port: 5557
+    protocol: TCP
+    targetPort: 5557
+  inferencePool:
+    failureMode: FailOpen
+  modelServers:
+    matchLabels:
+      llm-d.ai/inferenceServing: 'true'
+      llm-d.ai/model: meta-lla-77b3c6b1-2-70b-hf
+    targetPorts:
+    - number: 8000
+  monitoring:
+    interval: 10s
+    prometheus:
+      auth:
+        enabled: true
+        secretName: inference-gateway-sa-metrics-reader-secret
+      enabled: false

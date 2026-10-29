@@ -1,0 +1,60 @@
+experiment:
+  name: blis-pareto-chart-70b
+  description: Llama 3.1 70B NSGA-II search for Pareto frontier chart
+
+workload:
+  input_seq_len: {mean: 512, max: 1024}
+  output_seq_len: {mean: 256, max: 512}
+  arrival: poisson
+  num_requests: 10000
+  seed: 42
+
+concept_map:
+  model:
+    value: meta-llama/Llama-3.1-70B
+  hardware:
+    value: H100_SXM_80GB
+    blis: {arg: "--hardware", value: "H100"}
+  slo_ttft_ms:
+    value: 1000
+  seed:
+    value: 42
+  max_gpus:
+    value: 8
+  gpu_cost_per_hour:
+    value: 3.20
+  latency_model:
+    value: trained-physics
+  tp:
+    value: [2, 4, 8]
+  deployment_replicas:
+    value: [1, 2, 3, 4]
+  max_num_seqs:
+    value: [32, 64, 128, 256, 512]
+  block_size:
+    value: [16, 32]
+  scheduler:
+    value: [fcfs, sjf]
+
+tools:
+  blis:
+    search:
+      strategy: nsga2
+      fixed_rate: 200
+      search_script: /Users/jchen/go/src/inference-sim/inference-sim/search.py
+      nsga2:
+        pop_size: 50
+        n_gens: 5
+        workers: 8
+        objectives: [throughput, ttft_mean, gpu_count]
+        params:
+          tp: [2, 4, 8]
+          num_instances: [1, 2, 3, 4]
+          scheduler: [fcfs, sjf]
+          max_num_running_reqs: [32, 64, 128, 256, 512]
+          total_kv_blocks: [2000, 3000, 4000, 5000, 7500, 10000]
+          block_size_in_tokens: [16, 32]
+
+analysis:
+  top_k: 3
+  min_throughput_tok_s: 200

@@ -1,0 +1,73 @@
+router:
+  epp:
+    replicas: 1
+    image:
+      name: llm-d-router-endpoint-picker-dev
+      registry: ghcr.io
+      repository: llm-d/llm-d-router-endpoint-picker-dev
+      tag: main
+      pullPolicy: Always
+    extProcPort: 9002
+    extraContainerPorts:
+      - name: zmq
+        containerPort: 5557
+        protocol: TCP
+    env:
+      - name: HF_TOKEN
+        valueFrom:
+          secretKeyRef:
+            name: hf-secret
+            key: HF_TOKEN
+    pluginsConfigFile: "llmopt3-routing.yaml"
+    pluginsCustomConfig:
+      llmopt3-routing.yaml: |
+        apiVersion: llm-d.ai/v1alpha1
+        kind: EndpointPickerConfig
+        plugins:
+        - type: kv-cache-utilization-scorer
+        - type: load-aware-scorer
+        - type: queue-scorer
+        schedulingProfiles:
+        - name: default
+          plugins:
+          - pluginRef: kv-cache-utilization-scorer
+            weight: 5
+          - pluginRef: load-aware-scorer
+            weight: 2
+          - pluginRef: queue-scorer
+            weight: 2
+
+    flags:
+      v: "1"
+
+  extraServicePorts:
+    - name: zmq
+      port: 5557
+      targetPort: 5557
+      protocol: TCP
+
+  monitoring:
+    interval: "10s"
+    prometheus:
+      enabled: true
+      auth:
+        enabled: true
+        # Overridable Secret name for the Prometheus ServiceAccount token.
+        # In multi-stack scenarios two EPP releases sharing this Secret name
+        # in one namespace collide on Helm ownership; render_plans rewrites
+        # the default per-stack to keep them disjoint.
+        secretName: inference-gateway-sa-metrics-reader-secret
+
+
+  inferencePool:
+    failureMode: "FailOpen"
+
+  modelServers:
+    targetPorts:
+      - number: 8000
+    matchLabels:
+      llm-d.ai/inferenceServing: "true"
+      llm-d.ai/model: meta-lla-77b3c6b1-2-70b-hf
+
+provider:
+  name: istio

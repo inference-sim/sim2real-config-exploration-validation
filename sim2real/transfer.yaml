@@ -1,32 +1,35 @@
 kind: sim2real-transfer
 version: 3
 
-scenario: config-exploration-validation
+scenario: config-exploration-70b-codegen
 
 baselines:
-  # BLIS (inference-sim): TP=2, TP=4, TP=8
+  # BLIS (inference-sim, NSGA-II): cheapest configs meeting TTFT<=500ms
+  # blis1: TP=2 R=1 (2G), blis2: TP=1 R=2 (2G), blis3: TP=4 R=1 (4G)
   - name: blis1
-    scenario: baselines/blis-1.yaml
+    scenario: baselines-70b-new/blis-1.yaml
   - name: blis2
-    scenario: baselines/blis-2.yaml
+    scenario: baselines-70b-new/blis-2.yaml
   - name: blis3
-    scenario: baselines/blis-3.yaml
+    scenario: baselines-70b-new/blis-3.yaml
 
-  # AIConfigurator: TP=1 x1, TP=1 x2, TP=1 x3
+  # AIConfigurator: cheapest configs meeting TTFT<=500ms
+  # aic1: TP=2 R=1 (2G), aic2: TP=4 R=1 (4G), aic3: TP=2 R=2 (4G)
   - name: aiconfigurator1
-    scenario: baselines/aiconfigurator-1.yaml
+    scenario: baselines-70b-new/aiconfigurator-1.yaml
   - name: aiconfigurator2
-    scenario: baselines/aiconfigurator-2.yaml
+    scenario: baselines-70b-new/aiconfigurator-2.yaml
   - name: aiconfigurator3
-    scenario: baselines/aiconfigurator-3.yaml
+    scenario: baselines-70b-new/aiconfigurator-3.yaml
 
-  # llm-optimizer: TP=1, TP=2, TP=3
+  # llm-optimizer: cheapest configs meeting TTFT<=500ms
+  # lmo1: TP=2 (2G), lmo2: TP=3 (3G), lmo3: TP=4 (4G)
   - name: llmoptimizer1
-    scenario: baselines/llm-optimizer-1.yaml
+    scenario: baselines-70b-new/llm-optimizer-1.yaml
   - name: llmoptimizer2
-    scenario: baselines/llm-optimizer-2.yaml
+    scenario: baselines-70b-new/llm-optimizer-2.yaml
   - name: llmoptimizer3
-    scenario: baselines/llm-optimizer-3.yaml
+    scenario: baselines-70b-new/llm-optimizer-3.yaml
 
 workloads:
-  - workloads/chatbot.yaml
+  - workloads/shared_prefix_codegen.yaml

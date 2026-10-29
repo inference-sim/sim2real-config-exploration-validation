@@ -1,0 +1,80 @@
+scenario:
+  - name: blis-1
+
+    affinity:
+      enabled: true
+      nodeSelector:
+        kubernetes.io/hostname: pokprod-b93r44s2
+
+    images:
+      vllm:
+        tag: v0.22.1
+      vllmOpenai:
+        tag: v0.22.1
+
+    model:
+      name: meta-llama/Llama-2-70b-hf
+      shortName: meta-llama-llama-2-70b-hf
+      path: models/meta-llama/Llama-2-70b-hf
+      huggingfaceId: meta-llama/Llama-2-70b-hf
+      size: 1Ti
+      maxModelLen: 4096
+      blockSize: 16
+      gpuMemoryUtilization: 0.9
+
+    decode:
+      replicas: 1
+      nodeSelector:
+        kubernetes.io/hostname: pokprod-b93r44s2
+      extraEnvVars:
+      - name: TORCHINDUCTOR_CACHE_DIR
+        value: /tmp
+      - name: USER
+        value: vllm
+      acceleratorType:
+        labelKey: nvidia.com/gpu.product
+        labelValue: NVIDIA-H100-80GB-HBM3
+      parallelism:
+        data: 1
+        dataLocal: 1
+        tensor: 4
+        workers: 4
+      vllm:
+        loggingLevel: INFO
+        additionalFlags:
+        - "--max-num-seqs=64"
+        - "--max-num-batched-tokens=8192"
+        - "--enable-chunked-prefill"
+        - "--dtype=bfloat16"
+        - "--max-model-len=4096"
+
+    huggingface:
+      secretName: hf-secret
+
+    inferenceExtension:
+      pluginsConfigFile: "blis-1-routing.yaml"
+      pluginsCustomConfig:
+        blis-1-routing.yaml: |
+          apiVersion: llm-d.ai/v1alpha1
+          kind: EndpointPickerConfig
+          plugins:
+          - type: decode-filter
+          - type: kv-cache-utilization-scorer
+          - type: load-aware-scorer
+          - type: max-score-picker
+          - type: prefix-cache-scorer
+          - type: queue-scorer
+          - type: single-profile-handler
+          schedulingProfiles:
+          - name: default
+            plugins:
+            - pluginRef: decode-filter
+            - pluginRef: max-score-picker
+            - pluginRef: kv-cache-utilization-scorer
+              weight: 5
+            - pluginRef: load-aware-scorer
+              weight: 2
+            - pluginRef: prefix-cache-scorer
+              weight: 3
+            - pluginRef: queue-scorer
+              weight: 2

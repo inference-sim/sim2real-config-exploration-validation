@@ -1,0 +1,22 @@
+# Shared-prefix code generation workload for 70B validation.
+#
+# Matches results-70b-new/experiment.yaml:
+#   ISL: mean=566 (system_prompt 100 + question 466), max=1024
+#   OSL: mean=247, max=512
+#   Arrival: staged constant (5 rps for 600s, then 10 rps for 600s)
+#   Seed: 42
+
+version: "2"
+seed: 42
+category: language
+aggregate_rate: 10
+num_requests: 10000
+
+clients:
+  - id: "codegen"
+    slo_class: ""
+    rate_fraction: 1.0
+    streaming: true
+    arrival: {process: constant}
+    input_distribution: {type: gaussian, params: {mean: 566, std_dev: 150, min: 64, max: 1024}}
+    output_distribution: {type: gaussian, params: {mean: 247, std_dev: 80, min: 16, max: 512}}

@@ -9,7 +9,7 @@ AIConfigurator optimizes LLM inference deployment configurations for disaggregat
 ### From PyPI
 
 ```bash
-pip install aiconfigurator==0.8.0
+pip install aiconfigurator==0.9.0
 ```
 
 ### From Source
@@ -289,6 +289,57 @@ aiconfigurator cli generate \
 - **TensorRT-LLM** (`trtllm`) - default, full support
 - **vLLM** (`vllm`) - dense models only, currently being evaluated
 - **SGLang** (`sglang`) - dense and MoE models, currently being evaluated
+
+---
+
+## Search Algorithm Internals (`cli default`)
+
+The `cli default` command performs a **deterministic exhaustive grid search** over all valid parameter combinations. No Bayesian optimization or adaptive sampling. Each candidate is evaluated using a model-based latency estimator (no actual execution).
+
+**Key source files:** `sdk/task.py` (search space definition), `sdk/pareto_analysis.py` (sweep orchestration), `sdk/backends/trtllm_backend.py` (agg sweep, lines 450-570), `sdk/inference_session.py` (disagg sweep + rate matching, lines 486-819).
+
+### Aggregated Mode (Single-Level Grid)
+
+Sweeps: TP x PP x DP x batch_size x context_tokens
+
+| Parameter | Candidates |
+|-----------|-----------|
+| TP | `[1, 2, 4, 8]` (`[1, 2, 4, 8, 16]` for GB200/GB300) |
+| PP | `[1]` (disabled by default) |
+| DP | `[1, 2, 4, 8]` for MoE models, `[1]` otherwise |
+| MoE-EP | `[1, 2, 4, 8]` for MoE models |
+| Batch size | 1-1024 with adaptive stride: step 1 for 1-15, step 4 for 16-28, step 8 for 32-56, step 16 for 64-240, step 32 for 256-480, step 256 for 512-768, 1024. Capped by `--max-batch-size` (default 512). |
+| Context tokens | 0 to `max(8192, 2*ISL)` with stride 512 (finer with `--enable-chunked-prefill`) |
+
+### Disaggregated Mode (Two-Level Grid + Rate Matching)
+
+**Stage 1:** Enumerate prefill and decode worker configs independently (same TP/PP/DP ranges as agg, plus per-worker batch sizes). Prefill batch: 1 to `prefill_max_num_tokens // ISL` (default max_tokens=16384). Decode batch: 1-512 with adaptive stride.
+
+**Stage 2 (Rate Matching):** Sweeps all `(num_prefill_workers, num_decode_workers)` pairs. Applies degradation factors (prefill 0.9, decode 0.92) and maximizes `min(prefill_throughput, decode_throughput) / total_gpus` subject to balanced prefill/decode rates.
+
+Max workers: 32 prefill, 32 decode.
+
+### Evaluation Model
+
+For each candidate:
+1. Looks up micro-benchmarked latency from silicon database for each operation (GEMM, attention, MoE) at the specific batch/sequence/parallelism configuration
+2. Checks memory feasibility; OOM configs filtered with early termination (larger batches will also OOM)
+3. Simulates IFB scheduling to compute TTFT, TPOT, tokens/s, tokens/s/gpu, seq/s, concurrency, memory usage
+
+### SLA Filtering
+
+Hard filter; candidates discarded immediately if:
+- `TTFT > target_ttft` (default 2000ms via `--ttft`)
+- `TPOT > target_tpot` (default 30ms via `--tpot`)
+
+For disagg mode, a correction factor of 1.8x is applied to prefill TTFT (accounts for autoscale overhead). If no configs pass, the experiment fails.
+
+### Ranking and Selection
+
+- **Agg:** Sorted by `seq/s` (system throughput) descending; top-N returned (default N=5 via `--top-n`)
+- **Disagg:** Sorted by `tokens/s/gpu` (efficiency), tie-broken by fewer total GPUs
+- **Final winner (agg vs disagg):** Whichever experiment achieves the highest throughput
+- Results post-processed through Pareto frontier showing trade-off between per-request throughput (`tokens/s/user`) and per-GPU efficiency (`tokens/s/gpu`)
 
 ---
 

@@ -1,0 +1,73 @@
+scenario:
+- name: aicfg2
+  decode:
+    acceleratorType:
+      labelKey: nvidia.com/gpu.product
+      labelValue: NVIDIA-H100-80GB-HBM3
+    extraEnvVars:
+    - name: LOGNAME
+      value: vllm
+    parallelism:
+      data: 1
+      dataLocal: 1
+      tensor: 2
+      workers: 2
+    replicas: 2
+    resources:
+      requests:
+        cpu: '4'
+        memory: 16Gi
+      limits:
+        cpu: '4'
+        memory: 16Gi
+    vllm:
+      loggingLevel: INFO
+      additionalFlags:
+      - --max-num-seqs=20
+      - --max-num-batched-tokens=566
+      - --enable-chunked-prefill
+      - --no-disable-uvicorn-access-log
+      - --no-enforce-eager
+      - --dtype=bfloat16
+      - --max-model-len=4096
+  huggingface:
+    secretName: hf-secret
+  images:
+    vllm:
+      tag: v0.22.1
+    vllmOpenai:
+      tag: v0.22.1
+  inferenceExtension:
+    pluginsConfigFile: custom-plugins.yaml
+    pluginsCustomConfig:
+      custom-plugins.yaml: "apiVersion: llm-d.ai/v1alpha1\nkind: EndpointPickerConfig\n\
+        featureGates:\n- flowControl\nplugins:\n  - type: queue-scorer\n  - type:\
+        \ kv-cache-utilization-scorer\n  - type: prefix-cache-scorer\nschedulingProfiles:\n\
+        \  - name: default\n    plugins:\n      - pluginRef: queue-scorer\n      \
+        \  weight: 2.0\n      - pluginRef: kv-cache-utilization-scorer\n        weight:\
+        \ 2.0\n      - pluginRef: prefix-cache-scorer\n        weight: 3.0\nflowControl:\
+        \ {}\n"
+    resources:
+      requests:
+        cpu: '4'
+      limits:
+        cpu: '4'
+    verbosity: '5'
+  model:
+    blockSize: 16
+    gpuMemoryUtilization: 0.9
+    huggingfaceId: meta-llama/Llama-2-70b-hf
+    maxModelLen: 4096
+    name: meta-llama/Llama-2-70b-hf
+    path: models/meta-llama/Llama-2-70b-hf
+    shortName: meta-llama-llama-2-70b-hf
+    size: 1Ti
+  routing:
+    proxy:
+      resources:
+        requests:
+          cpu: '4'
+          memory: 16Gi
+        limits:
+          cpu: '4'
+          memory: 16Gi

@@ -1,0 +1,11 @@
+trace_version: 3
+time_unit: us
+created_at: "2026-06-22T19:08:27Z"
+mode: real
+warm_up_requests: 0
+workload_seed: 42
+workload_spec: /workspace/workload.yaml
+server:
+    type: vllm
+    model: meta-llama/Llama-2-70b-hf
+network: {}

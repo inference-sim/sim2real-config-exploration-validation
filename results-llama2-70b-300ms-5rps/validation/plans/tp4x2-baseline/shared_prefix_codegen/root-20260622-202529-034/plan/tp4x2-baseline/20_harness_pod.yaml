@@ -1,0 +1,121 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: 
+  namespace: jchen
+  labels:
+    app: llmdbench-harness-launcher
+    function: load_generator
+spec:
+  containers:
+  - name: harness
+    image: ghcr.io/llm-d/llm-d-benchmark:v0.6.8.1
+    imagePullPolicy: Always
+    securityContext:
+      runAsUser: 0
+    command: ["sh", "-c"]
+    args:
+    - ""
+    resources:
+      limits:
+        cpu: "16"
+        memory: 32Gi
+      requests:
+        cpu: "16"
+        memory: 32Gi
+    env:
+    - name: LLMDBENCH_RUN_EXPERIMENT_LAUNCHER
+      value: "1"
+    - name: LLMDBENCH_MAGIC_ENVAR
+      value: "harness_pod"
+    - name: LLMDBENCH_DEPLOY_METHODS
+      value: "modelservice"
+    - name: LLMDBENCH_CLUSTER_TYPE
+      value: "unrecognized"
+    - name: LLMDBENCH_RUN_WORKSPACE_DIR
+      value: "/workspace"
+    - name: LLMDBENCH_CONTROL_WORK_DIR
+      value: ""
+    - name: LLMDBENCH_DEPLOY_CURRENT_MODEL
+      value: "meta-llama/Llama-2-70b-hf"
+    - name: LLMDBENCH_DEPLOY_CURRENT_TOKENIZER
+      value: "meta-llama/Llama-2-70b-hf"
+    - name: LLMDBENCH_HARNESS_STACK_ENDPOINT_URL
+      value: ""
+    - name: LLMDBENCH_HARNESS_STACK_TYPE
+      value: ""
+    - name: LLMDBENCH_HARNESS_NAME
+      value: "inference-perf"
+    - name: LLMDBENCH_RUN_EXPERIMENT_ID
+      value: ""
+    - name: RAYON_NUM_THREADS
+      value: "4"
+    - name: HF_TOKEN_SECRET
+      value: "hf-secret"
+    # HuggingFace harness binaries split between the two env-var
+    # names: guidellm and a number of vLLM utilities read HF_TOKEN,
+    # while huggingface_hub-based libraries also accept
+    # HUGGING_FACE_HUB_TOKEN.  Setting both from the same secretKeyRef
+    # eliminates the question -- any harness that reads either name
+    # gets the token.
+    - name: HF_TOKEN
+      valueFrom:
+        secretKeyRef:
+          name: hf-secret
+          key: HF_TOKEN
+    - name: HUGGING_FACE_HUB_TOKEN
+      valueFrom:
+        secretKeyRef:
+          name: hf-secret
+          key: HF_TOKEN
+    - name: POD_NAME
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.name
+    - name: POD_UID
+      valueFrom:
+        fieldRef:
+          fieldPath: metadata.uid
+    - name: LLMDBENCH_VLLM_COMMON_NAMESPACE
+      value: "jchen"
+    - name: LLMDBENCH_VLLM_COMMON_INFERENCE_PORT
+      value: "8000"
+    - name: LLMDBENCH_RUN_EXPERIMENT_RESULTS_DIR_PREFIX
+      value: "/requests"
+    - name: LLMDBENCH_HARNESS_STACK_NAME
+      value: "meta-lla-77b3c6b1-2-70b-hf"
+    - name: LLMDBENCH_VLLM_COMMON_METRICS_SCRAPE_ENABLED
+      value: "false"
+    - name: LLMDBENCH_VLLM_COMMON_METRICS_PORT
+      value: "8200"
+    - name: LLMDBENCH_VLLM_MONITORING_METRICS_PATH
+      value: "/metrics"
+    - name: LLMDBENCH_EPP_METRICS_SECRET
+      value: "inference-gateway-sa-metrics-reader-secret"
+    - name: LLMDBENCH_STANDALONE_ENABLED
+      value: "false"
+    - name: LLMDBENCH_STANDALONE_LAUNCHER_ENABLED
+      value: "false"
+    - name: LLMDBENCH_FMA_ENABLED
+      value: "false"
+    - name: LLMDBENCH_VLLM_COMMON_VLLM_LOAD_FORMAT
+      value: "auto"
+    volumeMounts:
+    - name: results
+      mountPath: /requests
+    - name: inference-perf-profiles
+      mountPath: /workspace/profiles/inference-perf
+    - name: harness-scripts
+      mountPath: /workspace/harnesses
+  volumes:
+  - name: results
+    persistentVolumeClaim:
+      claimName: workload-pvc
+  - name: inference-perf-profiles
+    configMap:
+      name: inference-perf-profiles
+  - name: harness-scripts
+    configMap:
+      name: llmdbench-harness-scripts
+      defaultMode: 0755
+  restartPolicy: Never

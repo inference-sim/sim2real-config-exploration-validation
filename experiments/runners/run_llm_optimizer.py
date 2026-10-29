@@ -207,9 +207,6 @@ class LLMOptimizerRunner(BaseRunner):
                 num_replicas=1,
                 data_parallel_size=dp,
                 max_num_seqs=concurrency,
-                max_num_batched_tokens=concurrency * (self.workload.isl_mean + self.workload.osl_mean),
-                enable_chunked_prefill=False,
-                block_size=16,
             )
 
             tool_cfg = ToolConfig(

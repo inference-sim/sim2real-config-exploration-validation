@@ -12,6 +12,19 @@ Side-by-side comparison of capabilities across all five estimators. Focuses on d
 | Native config search | No | No | Yes | Yes | Yes |
 | Output format | JSON metrics | CSV per-request | DataFrame / YAML configs | W&B + CSV + Chrome trace | JSON results |
 
+## Profiling Requirements
+
+| | inference-sim | LLMServingSim | AIConfigurator | Vidur | llm-optimizer |
+|---|---|---|---|---|---|
+| **Requires profiling?** | No | Yes (one-time per model+hardware) | Optional (silicon DB available) | No (ships with profiles) | No (live benchmarking) |
+| **Profiling hardware** | N/A | Real GPU (1 GPU minimum, TP degree GPUs for network) | Real GPU (for adding new systems to DB) | Real GPU (only for new models/configs) | N/A |
+| **Can profile new models?** | N/A | Yes (via `python -m profiler`) | Limited (requires NVIDIA partnership) | Yes (via `vidur/profiling/` scripts) | N/A |
+| **Profiling location** | N/A | `LLMServingSim/profiles/{hardware}/{model}/` | `src/aiconfigurator/systems/{name}.yaml` + CSVs | `data/profiling/compute/` and `data/profiling/network/` | N/A |
+| **Pre-captured profiles** | N/A | Ships with Llama-2-7B/70B, Llama-3-8B/70B profiles for A100/H100 | Ships with H100/H200/A100/B200/GB200 silicon data | Ships with Llama-2/3, CodeLlama, Qwen, InternLM for A100/H100/A40 | N/A |
+| **TP degrees profiled** | N/A | 1, 2, 4, 8, 16 (per model) | N/A (analytical) | 1, 2, 4, 8 (Llama-2-70b has all) | N/A |
+
+**Key insight for TP=8:** Vidur already ships with complete TP=8 profiling data for Llama-2-70b on A100, A40, and H100 GPUs. LLMServingSim requires profiling on real hardware to add TP=8 support for new models.
+
 ## SLO-Aware Search
 
 This is the key differentiator for the paper's config exploration experiments.
@@ -25,6 +38,8 @@ This is the key differentiator for the paper's config exploration experiments.
 | **Limitation** | No distribution awareness; assumes steady-state. Cannot express "P99 TTFT < X". | Only constrains scheduling delay, not TTFT/TPOT/E2E directly (though scheduling delay correlates). | Requires real GPUs and server for every config point. |
 
 **inference-sim and LLMServingSim** produce per-request latency distributions (TTFT, ITL, E2E) but have no built-in constraint filtering or search. They output the raw data; SLO checking must be done externally.
+
+**inference-sim external search wrapper** (`estimators/inference-sim/search.py`): Not part of the BLIS binary, but provides constraint support for experiments. Uses format `metric_name operator value` (e.g., `"ttft_p99 <= 300"`). Operators: `<=`, `>=`, `<`, `>`, `==`. Constraints are classified as config-only (checked pre-simulation, e.g., `gpu_count < 8`) or metric (checked post-simulation, e.g., `ttft_p99 <= 300`). Configs violating metric constraints get all objectives set to `float('inf')` and are excluded from Pareto front. See INFERENCE-SIM.md for details.
 
 ## Configuration Dimensions (All Arguments)
 
@@ -417,9 +432,9 @@ Each tool uses a different identifier scheme, property set, and config format fo
 | Tool | How it predicts latency |
 |---|---|
 | inference-sim | Analytical roofline (compute vs memory-bound per phase) with optional trained-physics coefficients. Uses TFLOPS + bandwidth + MFU. |
-| LLMServingSim | Purely empirical: replays profiled per-layer kernel latencies from real GPU measurements. No analytical model. |
+| LLMServingSim | Purely empirical: replays profiled per-layer kernel latencies from real GPU measurements. No analytical model. Requires real GPU for profiling. |
 | AIConfigurator | Silicon-calibrated: uses measured GEMM/attention/NCCL performance data per system. Falls back to analytical SOL model. |
-| Vidur | Random forest ML model trained on profiled compute/network CSV data. Predicts per-operation latency. |
+| Vidur | Random forest ML model trained on profiled compute/network CSV data. Predicts per-operation latency. Ships with pre-captured profiles for common configs; supports live profiling on GPU hardware. |
 | llm-optimizer | Live measurement (benchmark mode) or roofline analysis (estimate mode). |
 
 ## GPU Cost Modeling
